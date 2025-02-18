@@ -185,8 +185,6 @@ Zlib OR Apache-2.0 OR MIT
 }
 
 fn check_test_attrs(path: &Path, text: &str) {
-    let panic_rule =
-        "https://github.com/rust-lang/rust-analyzer/blob/master/docs/dev/style.md#should_panic";
     let need_panic: &[&str] = &[
         // This file.
         "slow-tests/tidy.rs",
@@ -196,8 +194,7 @@ fn check_test_attrs(path: &Path, text: &str) {
     ];
     if text.contains("#[should_panic") && !need_panic.iter().any(|p| path.ends_with(p)) {
         panic!(
-            "\ndon't add `#[should_panic]` tests, see:\n\n    {}\n\n   {}\n",
-            panic_rule,
+            "\ndon't add `#[should_panic]` tests:\n\n    {}\n",
             path.display(),
         )
     }
