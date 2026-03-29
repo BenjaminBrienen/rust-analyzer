@@ -5,7 +5,7 @@ use ide_db::{FxHashSet, LineIndexDatabase as _, base_db::SourceDatabase, defs::N
 use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 use parser::SyntaxKind;
 use syntax::{AstNode, WalkEvent, ast};
-use vfs::FileId;
+use vfs::{AbsPathBuf, FileId};
 
 use crate::cli::flags;
 
@@ -25,8 +25,7 @@ impl flags::UnresolvedReferences {
     }
 
     fn run_(self) -> anyhow::Result<()> {
-        let root =
-            vfs::AbsPathBuf::assert_utf8(std::env::current_dir()?.join(&self.path)).normalize();
+        let root = vfs::AbsPathBuf::make_absolute(&self.path);
         let config = crate::config::Config::new(
             root,
             lsp_types::ClientCapabilities::default(),
@@ -34,9 +33,8 @@ impl flags::UnresolvedReferences {
             None,
         );
         let cargo_config = config.cargo(None);
-        let with_proc_macro_server = if let Some(p) = &self.proc_macro_srv {
-            let path = vfs::AbsPathBuf::assert_utf8(std::env::current_dir()?.join(p));
-            ProcMacroServerChoice::Explicit(path)
+        let with_proc_macro_server = if let Some(path) = &self.proc_macro_srv {
+            ProcMacroServerChoice::Explicit(vfs::AbsPathBuf::make_absolute(path))
         } else {
             ProcMacroServerChoice::Sysroot
         };
@@ -47,8 +45,12 @@ impl flags::UnresolvedReferences {
             num_worker_threads: 1,
             proc_macro_processes: config.proc_macro_num_processes(),
         };
-        let (db, vfs, _proc_macro) =
-            load_workspace_at(&self.path, &cargo_config, &load_cargo_config, &|_| {})?;
+        let (db, vfs, _proc_macro) = load_workspace_at(
+            &AbsPathBuf::make_absolute(&self.path),
+            &cargo_config,
+            &load_cargo_config,
+            &|_| {},
+        )?;
         let host = AnalysisHost::with_database(db);
         let db = host.raw_database();
         let sema = Semantics::new(db);

@@ -5,6 +5,7 @@ use ide_db::{EditionedFileId, base_db::SourceDatabase};
 use ide_ssr::MatchFinder;
 use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 use project_model::{CargoConfig, RustLibSource};
+use vfs::AbsPathBuf;
 
 use crate::cli::flags;
 
@@ -24,7 +25,7 @@ impl flags::Ssr {
             proc_macro_processes: 1,
         };
         let (ref db, vfs, _proc_macro) = load_workspace_at(
-            &std::env::current_dir()?,
+            &AbsPathBuf::current_working_directory(),
             &cargo_config,
             &load_cargo_config,
             &|_| {},
@@ -62,7 +63,7 @@ impl flags::Search {
             proc_macro_processes: 1,
         };
         let (ref db, _vfs, _proc_macro) = load_workspace_at(
-            &std::env::current_dir()?,
+            &AbsPathBuf::current_working_directory(),
             &cargo_config,
             &load_cargo_config,
             &|_| {},

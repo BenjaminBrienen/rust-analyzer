@@ -2,7 +2,6 @@
 use anyhow::format_err;
 use ide::{Annotation, AnnotationKind, AssistKind, LineCol};
 use ide_db::{FileId, FilePosition, FileRange, line_index::WideLineCol};
-use paths::Utf8PathBuf;
 use syntax::{TextRange, TextSize};
 use vfs::AbsPathBuf;
 
@@ -14,7 +13,7 @@ use crate::{
 
 pub(crate) fn abs_path(url: &lsp_types::Url) -> anyhow::Result<AbsPathBuf> {
     let path = url.to_file_path().map_err(|()| anyhow::format_err!("url is not a file"))?;
-    Ok(AbsPathBuf::try_from(Utf8PathBuf::from_path_buf(path).unwrap()).unwrap())
+    Ok(AbsPathBuf::assert_absolute_and_utf8(path))
 }
 
 pub(crate) fn vfs_path(url: &lsp_types::Url) -> anyhow::Result<vfs::VfsPath> {

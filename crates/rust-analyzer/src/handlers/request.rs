@@ -24,7 +24,6 @@ use lsp_types::{
     SemanticTokensParams, SemanticTokensRangeParams, SemanticTokensRangeResult,
     SemanticTokensResult, SymbolInformation, SymbolTag, TextDocumentIdentifier, Url, WorkspaceEdit,
 };
-use paths::Utf8PathBuf;
 use project_model::{CargoWorkspace, ManifestPath, ProjectWorkspaceKind, TargetKind};
 use serde_json::json;
 use stdx::{format_to, never};
@@ -903,14 +902,11 @@ pub(crate) fn handle_parent_module(
     params: lsp_types::TextDocumentPositionParams,
 ) -> anyhow::Result<Option<lsp_types::GotoDefinitionResponse>> {
     let _p = tracing::info_span!("handle_parent_module").entered();
-    if let Ok(file_path) = &params.text_document.uri.to_file_path() {
+    if let Ok(file_path) = params.text_document.uri.to_file_path() {
         if file_path.file_name().unwrap_or_default() == "Cargo.toml" {
             // search workspaces for parent packages or fallback to workspace root
-            let abs_path_buf = match Utf8PathBuf::from_path_buf(file_path.to_path_buf())
-                .ok()
-                .map(AbsPathBuf::try_from)
-            {
-                Some(Ok(abs_path_buf)) => abs_path_buf,
+            let abs_path_buf = match AbsPathBuf::try_from(file_path) {
+                Ok(abs_path_buf) => abs_path_buf,
                 _ => return Ok(None),
             };
 
@@ -2362,14 +2358,18 @@ fn run_rustfmt(
     let current_dir = match text_document.uri.to_file_path() {
         Ok(mut path) => {
             // pop off file name
-            if path.pop() && path.is_dir() { path } else { std::env::current_dir()? }
+            if path.pop() && path.is_dir() {
+                AbsPathBuf::assert_absolute_and_utf8(path)
+            } else {
+                AbsPathBuf::current_working_directory()
+            }
         }
         Err(_) => {
             tracing::error!(
                 text_document = ?text_document.uri,
                 "Unable to get path, rustfmt.toml might be ignored"
             );
-            std::env::current_dir()?
+            AbsPathBuf::current_working_directory()
         }
     };
 
@@ -2431,7 +2431,6 @@ fn run_rustfmt(
             cmd
         }
         RustfmtConfig::CustomCommand { command, args } => {
-            let cmd = Utf8PathBuf::from(&command);
             let target_spec =
                 crates.first().and_then(|&crate_id| snap.target_spec_for_file(file_id, crate_id));
             let extra_env = snap.config.extra_env(source_root_id);
@@ -2443,13 +2442,13 @@ fn run_rustfmt(
                     let cmd_path = if command.contains(std::path::MAIN_SEPARATOR)
                         || (cfg!(windows) && command.contains('/'))
                     {
-                        snap.config.root_path().join(cmd).into()
+                        snap.config.root_path().join(command).into_utf8_path_buf()
                     } else {
-                        cmd
+                        command.into()
                     };
                     toolchain::command(cmd_path, current_dir, extra_env)
                 }
-                _ => toolchain::command(cmd, current_dir, extra_env),
+                _ => toolchain::command(command, current_dir, extra_env),
             };
 
             cmd.args(args);

@@ -3,6 +3,12 @@
 //! Of particular interest is the `feature_flags` hash map: while other fields
 //! configure the server itself, feature flags are passed into analysis, and
 //! tweak things like automatic insertion of `()` in completions.
+
+#![expect(
+    clippy::disallowed_types,
+    reason = "serialization interface must use infallible conversion"
+)]
+
 use std::{env, fmt, iter, ops::Not, sync::OnceLock};
 
 use cfg::{CfgAtom, CfgDiff};
@@ -20,7 +26,7 @@ use ide_db::{
     imports::insert_use::{ImportGranularity, InsertUseConfig, PrefixKind},
 };
 use itertools::{Either, Itertools};
-use paths::{Utf8Path, Utf8PathBuf};
+use paths::Utf8PathBuf;
 use project_model::{
     CargoConfig, CargoFeatures, ProjectJson, ProjectJsonData, ProjectJsonFromCommand,
     ProjectManifest, RustLibSource, TargetDirectoryConfig,
@@ -1132,12 +1138,12 @@ impl std::ops::Deref for Config {
 impl Config {
     /// Path to the user configuration dir. This can be seen as a generic way to define what would be `$XDG_CONFIG_HOME/rust-analyzer` in Linux.
     pub fn user_config_dir_path() -> Option<AbsPathBuf> {
-        let user_config_path = if let Some(path) = env::var_os("__TEST_RA_USER_CONFIG_DIR") {
-            std::path::PathBuf::from(path)
+        let path = if let Some(path) = env::var_os("__TEST_RA_USER_CONFIG_DIR") {
+            path.into()
         } else {
             dirs::config_dir()?.join("rust-analyzer")
         };
-        Some(AbsPathBuf::assert_utf8(user_config_path))
+        Some(AbsPathBuf::assert_absolute_and_utf8(path))
     }
 
     pub fn same_source_root_parent_map(
@@ -1184,16 +1190,12 @@ impl Config {
             tracing::info!("updating config from JSON: {:#}", json);
 
             if !(json.is_null() || json.as_object().is_some_and(|it| it.is_empty())) {
-                let detached_files = get_field_json::<Vec<Utf8PathBuf>>(
-                    &mut json,
-                    &mut Vec::new(),
-                    "detachedFiles",
-                    None,
-                )
-                .unwrap_or_default()
-                .into_iter()
-                .map(AbsPathBuf::assert)
-                .collect();
+                let detached_files =
+                    get_field_json::<Vec<_>>(&mut json, &mut Vec::new(), "detachedFiles", None)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|x: String| AbsPathBuf::assert(x))
+                        .collect();
 
                 patch_old_style::patch_json_for_outdated_configs(&mut json);
 
@@ -2143,7 +2145,7 @@ impl Config {
         !self.linkedProjects().is_empty()
     }
 
-    pub fn linked_manifests(&self) -> impl Iterator<Item = &Utf8Path> + '_ {
+    pub fn linked_manifests(&self) -> impl Iterator<Item = &AbsPath> + '_ {
         self.linkedProjects().iter().filter_map(|it| match it {
             ManifestOrProjectJson::Manifest(p) => Some(&**p),
             // despite having a buildfile, using this variant as a manifest
@@ -2174,7 +2176,7 @@ impl Config {
                 continue;
             }
 
-            let buf: Utf8PathBuf = manifest_path.to_path_buf().into();
+            let buf = manifest_path.to_path_buf();
             projects.push(ManifestOrProjectJson::Manifest(buf));
         }
 
@@ -2559,7 +2561,9 @@ impl Config {
         match &self.cargo_targetDir(source_root) {
             Some(TargetDirectory::UseSubdirectory(true)) => TargetDirectoryConfig::UseSubdirectory,
             Some(TargetDirectory::UseSubdirectory(false)) | None => TargetDirectoryConfig::None,
-            Some(TargetDirectory::Directory(dir)) => TargetDirectoryConfig::Directory(dir.clone()),
+            Some(TargetDirectory::Directory(dir)) => {
+                TargetDirectoryConfig::Directory(AbsPathBuf::make_absolute(&dir))
+            }
         }
     }
 
@@ -2877,7 +2881,11 @@ mod single_or_array {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 enum ManifestOrProjectJson {
-    Manifest(Utf8PathBuf),
+    Manifest(
+        #[serde(serialize_with = "serialize_abs_pathbuf")]
+        #[serde(deserialize_with = "deserialize_abs_pathbuf")]
+        AbsPathBuf,
+    ),
     ProjectJson(ProjectJsonData),
     DiscoveredProjectJson {
         data: ProjectJsonData,
@@ -2901,7 +2909,6 @@ fn serialize_abs_pathbuf<S>(path: &AbsPathBuf, se: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
-    let path: &Utf8Path = path.as_ref();
     se.serialize_str(path.as_str())
 }
 
@@ -3150,6 +3157,10 @@ macro_rules! _impl_for_config_data {
             $vis:vis $field:ident : $ty:ty = $default:expr,
         )*
     ) => {
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         impl Config {
             $(
                 $($doc)*
@@ -3194,6 +3205,10 @@ macro_rules! _impl_for_config_data {
             $vis:vis $field:ident : $ty:ty = $default:expr,
         )*
     ) => {
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         impl Config {
             $(
                 $($doc)*
@@ -3229,6 +3244,10 @@ macro_rules! _impl_for_config_data {
             $vis:vis $field:ident : $ty:ty = $default:expr,
         )*
     ) => {
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         impl Config {
             $(
                 $($doc)*
@@ -3255,6 +3274,10 @@ macro_rules! _impl_for_config_data {
             $vis:vis $field:ident : $ty:ty = $default:expr,
        )*
     ) => {
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         impl Config {
             $(
                 $($doc)*
@@ -3283,6 +3306,10 @@ macro_rules! _config_data {
         /// Default config values for this grouping.
         #[allow(non_snake_case)]
         #[derive(Debug, Clone)]
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         struct $name { $($field: $ty,)* }
 
         impl_for_config_data!{
@@ -3295,10 +3322,18 @@ macro_rules! _config_data {
         /// All fields `Option<T>`, `None` representing fields not set in a particular JSON/TOML blob.
         #[allow(non_snake_case)]
         #[derive(Clone, Default)]
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         struct $input { $(
             $field: Option<$ty>,
         )* }
 
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         impl std::fmt::Debug for $input {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 let mut s = f.debug_struct(stringify!($input));
@@ -3311,6 +3346,10 @@ macro_rules! _config_data {
             }
         }
 
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         impl Default for $name {
             fn default() -> Self {
                 $name {$(
@@ -3319,6 +3358,10 @@ macro_rules! _config_data {
             }
         }
 
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         #[allow(unused, clippy::ptr_arg)]
         impl $input {
             const FIELDS: &'static [&'static str] = &[$(stringify!($field)),*];
@@ -3358,6 +3401,10 @@ macro_rules! _config_data {
             }
         }
 
+        #[allow(
+            clippy::disallowed_types,
+            reason = "serialization interface must use infallible conversion"
+        )]
         mod $modname {
             #[test]
             fn fields_are_sorted() {
@@ -4170,7 +4217,7 @@ mod tests {
         let s = remove_ws(&schema);
         if !p.contains(&s) {
             package_json.replace_range(start..end, &schema);
-            ensure_file_contents(package_json_path.as_std_path(), &package_json)
+            ensure_file_contents(&package_json_path, &package_json)
         }
     }
 
@@ -4178,7 +4225,7 @@ mod tests {
     fn generate_config_documentation() {
         let docs_path = project_root().join("docs/book/src/configuration_generated.md");
         let expected = FullConfigInput::manual();
-        ensure_file_contents(docs_path.as_std_path(), &expected);
+        ensure_file_contents(&docs_path, &expected);
     }
 
     fn remove_ws(text: &str) -> String {
@@ -4187,8 +4234,7 @@ mod tests {
 
     #[test]
     fn proc_macro_srv_null() {
-        let mut config =
-            Config::new(AbsPathBuf::assert(project_root()), Default::default(), vec![], None);
+        let mut config = Config::new(project_root(), Default::default(), vec![], None);
 
         let mut change = ConfigChange::default();
         change.change_client_config(serde_json::json!({
@@ -4202,8 +4248,7 @@ mod tests {
 
     #[test]
     fn proc_macro_srv_abs() {
-        let mut config =
-            Config::new(AbsPathBuf::assert(project_root()), Default::default(), vec![], None);
+        let mut config = Config::new(project_root(), Default::default(), vec![], None);
         let mut change = ConfigChange::default();
         change.change_client_config(serde_json::json!({
         "procMacro" : {
@@ -4211,13 +4256,12 @@ mod tests {
         }}));
 
         (config, _, _) = config.apply_change(change);
-        assert_eq!(config.proc_macro_srv(), Some(AbsPathBuf::assert(project_root())));
+        assert_eq!(config.proc_macro_srv(), Some(project_root()));
     }
 
     #[test]
     fn proc_macro_srv_rel() {
-        let mut config =
-            Config::new(AbsPathBuf::assert(project_root()), Default::default(), vec![], None);
+        let mut config = Config::new(project_root(), Default::default(), vec![], None);
 
         let mut change = ConfigChange::default();
 
@@ -4228,16 +4272,12 @@ mod tests {
 
         (config, _, _) = config.apply_change(change);
 
-        assert_eq!(
-            config.proc_macro_srv(),
-            Some(AbsPathBuf::try_from(project_root().join("./server")).unwrap())
-        );
+        assert_eq!(config.proc_macro_srv(), Some(project_root().join("./server")));
     }
 
     #[test]
     fn cargo_target_dir_unset() {
-        let mut config =
-            Config::new(AbsPathBuf::assert(project_root()), Default::default(), vec![], None);
+        let mut config = Config::new(project_root(), Default::default(), vec![], None);
 
         let mut change = ConfigChange::default();
 
@@ -4258,8 +4298,7 @@ mod tests {
 
     #[test]
     fn cargo_target_dir_subdir() {
-        let mut config =
-            Config::new(AbsPathBuf::assert(project_root()), Default::default(), vec![], None);
+        let mut config = Config::new(project_root(), Default::default(), vec![], None);
 
         let mut change = ConfigChange::default();
         change.change_client_config(serde_json::json!({
@@ -4269,8 +4308,9 @@ mod tests {
         (config, _, _) = config.apply_change(change);
 
         assert_eq!(config.cargo_targetDir(None), &Some(TargetDirectory::UseSubdirectory(true)));
-        let ws_target_dir =
-            Utf8PathBuf::from(std::env::var("CARGO_TARGET_DIR").unwrap_or("target".to_owned()));
+        let ws_target_dir = AbsPathBuf::make_absolute(
+            &std::env::var("CARGO_TARGET_DIR").unwrap_or("target".to_owned()),
+        );
         assert!(matches!(
             config.flycheck(None),
             FlycheckConfig::Automatic {
@@ -4283,8 +4323,7 @@ mod tests {
 
     #[test]
     fn cargo_target_dir_relative_dir() {
-        let mut config =
-            Config::new(AbsPathBuf::assert(project_root()), Default::default(), vec![], None);
+        let mut config = Config::new(project_root(), Default::default(), vec![], None);
 
         let mut change = ConfigChange::default();
         change.change_client_config(serde_json::json!({
@@ -4293,17 +4332,23 @@ mod tests {
 
         (config, _, _) = config.apply_change(change);
 
-        assert_eq!(
-            config.cargo_targetDir(None),
-            &Some(TargetDirectory::Directory(Utf8PathBuf::from("other_folder")))
-        );
+        #[expect(
+            clippy::disallowed_types,
+            reason = "serialization interface supports relative paths and this is testing that"
+        )]
+        {
+            assert_eq!(
+                config.cargo_targetDir(None),
+                &Some(TargetDirectory::Directory(Utf8PathBuf::from("other_folder")))
+            );
+        }
         assert!(matches!(
             config.flycheck(None),
             FlycheckConfig::Automatic {
                 cargo_options: CargoOptions { target_dir_config, .. },
                 ..
             } if target_dir_config.target_dir(None).map(Cow::into_owned)
-                == Some(Utf8PathBuf::from("other_folder"))
+                == Some(AbsPathBuf::make_absolute(&"other_folder"))
         ));
     }
 }

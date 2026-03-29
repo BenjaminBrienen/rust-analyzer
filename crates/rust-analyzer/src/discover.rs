@@ -1,13 +1,18 @@
 //! Infrastructure for lazy project discovery. Currently only support rust-project.json discovery
 //! via a custom discover command.
-use std::path::Path;
+
+#![expect(
+    clippy::disallowed_types,
+    reason = "serialization interface must use infallible conversion"
+)]
 
 use crossbeam_channel::Sender;
 use ide_db::FxHashMap;
-use paths::{AbsPathBuf, Utf8Path, Utf8PathBuf};
+use paths::{AbsPathBuf, Utf8PathBuf};
 use project_model::ProjectJsonData;
 use serde::{Deserialize, Serialize};
 use tracing::{info_span, span::EnteredSpan};
+use vfs::AbsPath;
 
 use crate::command::{CommandHandle, JsonLinesParser};
 
@@ -32,7 +37,6 @@ fn serialize_abs_pathbuf<S>(path: &AbsPathBuf, se: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
-    let path: &Utf8Path = path.as_ref();
     se.serialize_str(path.as_str())
 }
 
@@ -46,7 +50,7 @@ impl DiscoverCommand {
     pub(crate) fn spawn(
         &self,
         discover_arg: DiscoverArgument,
-        current_dir: &Path,
+        current_dir: &AbsPath,
     ) -> anyhow::Result<DiscoverHandle> {
         let command = &self.command[0];
         let args = &self.command[1..];

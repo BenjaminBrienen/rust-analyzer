@@ -1630,7 +1630,7 @@ pub(crate) fn runnable(
                     let runnable_args = ShellRunnableArgs {
                         program: json_shell_runnable_args.program,
                         args: json_shell_runnable_args.args,
-                        cwd: json_shell_runnable_args.cwd,
+                        cwd: json_shell_runnable_args.cwd.into(),
                         environment: Default::default(),
                     };
                     Ok(Some(lsp_ext::Runnable {

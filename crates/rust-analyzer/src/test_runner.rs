@@ -2,7 +2,7 @@
 //! thread and report the result of each test in a channel.
 
 use crossbeam_channel::Sender;
-use paths::{AbsPath, Utf8Path};
+use paths::AbsPath;
 use project_model::TargetKind;
 use serde::Deserialize as _;
 use serde_derive::Deserialize;
@@ -98,7 +98,7 @@ impl CargoTestHandle {
         path: Option<&str>,
         options: CargoOptions,
         root: &AbsPath,
-        ws_target_dir: Option<&Utf8Path>,
+        ws_target_dir: Option<&AbsPath>,
         test_target: TestTarget,
         sender: Sender<CargoTestMessage>,
     ) -> anyhow::Result<Self> {

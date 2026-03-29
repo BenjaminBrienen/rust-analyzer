@@ -12,13 +12,9 @@ mod assert_linear;
 pub mod bench_fixture;
 mod fixture;
 
-use std::{
-    collections::BTreeMap,
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, env, fs};
 
-use paths::Utf8PathBuf;
+use paths::{AbsPath, AbsPathBuf};
 use profile::StopWatch;
 use stdx::is_ci;
 use text_size::{TextRange, TextSize};
@@ -402,18 +398,17 @@ pub fn skip_slow_tests() -> bool {
     should_skip
 }
 
-pub fn target_dir() -> Utf8PathBuf {
+pub fn target_dir() -> AbsPathBuf {
     match std::env::var("CARGO_TARGET_DIR") {
-        Ok(target) => Utf8PathBuf::from(target),
+        Ok(target) => AbsPathBuf::make_absolute(&target),
         Err(_) => project_root().join("target"),
     }
 }
 
 /// Returns the path to the root directory of `rust-analyzer` project.
-pub fn project_root() -> Utf8PathBuf {
-    let dir = env!("CARGO_MANIFEST_DIR");
-    Utf8PathBuf::from_path_buf(PathBuf::from(dir).parent().unwrap().parent().unwrap().to_owned())
-        .unwrap()
+pub fn project_root() -> AbsPathBuf {
+    let cargo_manifest_dir = AbsPathBuf::make_absolute(&env!("CARGO_MANIFEST_DIR"));
+    cargo_manifest_dir.parent().unwrap().parent().unwrap().to_owned()
 }
 
 pub fn format_diff(chunks: Vec<dissimilar::Chunk<'_>>) -> String {
@@ -473,7 +468,7 @@ pub fn bench(label: &'static str) -> impl Drop {
 /// Checks that the `file` has the specified `contents`. If that is not the
 /// case, updates the file and then fails the test.
 #[track_caller]
-pub fn ensure_file_contents(file: &Path, contents: &str) {
+pub fn ensure_file_contents(file: &AbsPath, contents: &str) {
     if let Err(()) = try_ensure_file_contents(file, contents) {
         panic!("Some files were not up-to-date");
     }
@@ -481,18 +476,16 @@ pub fn ensure_file_contents(file: &Path, contents: &str) {
 
 /// Checks that the `file` has the specified `contents`. If that is not the
 /// case, updates the file and return an Error.
-pub fn try_ensure_file_contents(file: &Path, contents: &str) -> Result<(), ()> {
+pub fn try_ensure_file_contents(file: &AbsPath, contents: &str) -> Result<(), ()> {
     match std::fs::read_to_string(file) {
         Ok(old_contents) if normalize_newlines(&old_contents) == normalize_newlines(contents) => {
             return Ok(());
         }
         _ => (),
     }
-    let display_path = file.strip_prefix(project_root()).unwrap_or(file);
-    eprintln!(
-        "\n\x1b[31;1merror\x1b[0m: {} was not up-to-date, updating\n",
-        display_path.display()
-    );
+    let display_path =
+        file.strip_prefix(&project_root()).map(|path| path.as_str()).unwrap_or(file.as_str());
+    eprintln!("\n\x1b[31;1merror\x1b[0m: {} was not up-to-date, updating\n", display_path);
     if is_ci() {
         eprintln!("    NOTE: run `cargo test` locally and commit the updated files\n");
     }

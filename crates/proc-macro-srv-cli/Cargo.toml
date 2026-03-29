@@ -26,11 +26,11 @@ span = { path = "../span", default-features = false }
 tt.workspace = true
 intern.workspace = true
 
-[build-dependencies]
-paths.workspace = true
-
 # used as proc macro test target
 proc-macro-test.path = "../proc-macro-srv/proc-macro-test"
+
+[build-dependencies]
+paths.workspace = true
 
 [features]
 default = []

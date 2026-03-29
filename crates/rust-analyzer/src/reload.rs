@@ -23,7 +23,6 @@ use ide_db::{
 use itertools::Itertools;
 use load_cargo::{ProjectFolders, load_proc_macro};
 use lsp_types::FileSystemWatcher;
-use paths::Utf8Path;
 use proc_macro_api::ProcMacroClient;
 use project_model::{
     ManifestPath, ProjectWorkspace, ProjectWorkspaceKind, WorkspaceBuildScripts, project_json,
@@ -324,9 +323,7 @@ impl GlobalState {
                     if let Some(build) = build
                         && is_quiescent
                     {
-                        let path = AbsPathBuf::try_from(build.build_file)
-                            .expect("Unable to convert to an AbsPath");
-                        let arg = DiscoverProjectParam::Buildfile(path);
+                        let arg = DiscoverProjectParam::Buildfile(build.build_file);
                         sender.send(Task::DiscoverLinkedProjects(arg)).unwrap();
                     }
                 }
@@ -939,7 +936,7 @@ impl GlobalState {
                             sysroot_root,
                             root.to_path_buf(),
                             manifest_path.map(|it| it.to_path_buf()),
-                            target_dir.map(|it| AsRef::<Utf8Path>::as_ref(it).to_path_buf()),
+                            target_dir.map(|it| AsRef::<AbsPath>::as_ref(it).to_path_buf()),
                         )
                     })
                     .collect()

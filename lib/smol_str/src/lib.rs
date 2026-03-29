@@ -424,6 +424,10 @@ impl AsRef<std::ffi::OsStr> for SmolStr {
 
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[expect(
+    clippy::disallowed_types,
+    reason = "a dependency on crates/paths does not make sense for this crate"
+)]
 impl AsRef<std::path::Path> for SmolStr {
     #[inline(always)]
     fn as_ref(&self) -> &std::path::Path {

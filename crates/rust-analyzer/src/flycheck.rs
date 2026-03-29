@@ -12,7 +12,7 @@ use cargo_metadata::PackageId;
 use crossbeam_channel::{Receiver, Sender, select_biased, unbounded};
 use ide_db::FxHashSet;
 use itertools::Itertools;
-use paths::{AbsPath, AbsPathBuf, Utf8Path, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf};
 use project_model::TargetDirectoryConfig;
 use project_model::project_json;
 use rustc_hash::FxHashMap;
@@ -63,7 +63,7 @@ pub(crate) enum Target {
 }
 
 impl CargoOptions {
-    pub(crate) fn apply_on_command(&self, cmd: &mut Command, ws_target_dir: Option<&Utf8Path>) {
+    pub(crate) fn apply_on_command(&self, cmd: &mut Command, ws_target_dir: Option<&AbsPath>) {
         for target in &self.target_tuples {
             cmd.args(["--target", target.as_str()]);
         }
@@ -201,7 +201,7 @@ impl FlycheckHandle {
         sysroot_root: Option<AbsPathBuf>,
         workspace_root: AbsPathBuf,
         manifest_path: Option<AbsPathBuf>,
-        ws_target_dir: Option<Utf8PathBuf>,
+        ws_target_dir: Option<AbsPathBuf>,
     ) -> FlycheckHandle {
         let actor = FlycheckActor::new(
             id,
@@ -404,7 +404,7 @@ struct FlycheckActor {
     config_json: FlycheckConfigJson,
 
     manifest_path: Option<AbsPathBuf>,
-    ws_target_dir: Option<Utf8PathBuf>,
+    ws_target_dir: Option<AbsPathBuf>,
     /// Either the workspace root of the workspace we are flychecking,
     /// or the project root of the project.
     root: Arc<AbsPathBuf>,
@@ -514,7 +514,7 @@ impl FlycheckActor {
         sysroot_root: Option<AbsPathBuf>,
         workspace_root: AbsPathBuf,
         manifest_path: Option<AbsPathBuf>,
-        ws_target_dir: Option<Utf8PathBuf>,
+        ws_target_dir: Option<AbsPathBuf>,
     ) -> FlycheckActor {
         tracing::info!(%id, ?workspace_root, "Spawning flycheck");
         FlycheckActor {
@@ -613,14 +613,14 @@ impl FlycheckActor {
                         sender,
                         match &self.config {
                             FlycheckConfig::Automatic { cargo_options, .. } => {
-                                let ws_target_dir =
-                                    self.ws_target_dir.as_ref().map(Utf8PathBuf::as_path);
-                                let target_dir =
-                                    cargo_options.target_dir_config.target_dir(ws_target_dir);
+                                let target_dir = cargo_options
+                                    .target_dir_config
+                                    .target_dir(self.ws_target_dir.as_deref());
 
                                 // If `"rust-analyzer.cargo.targetDir": null`, we should use
                                 // workspace's target dir instead of hard-coded fallback.
-                                let target_dir = target_dir.as_deref().or(ws_target_dir);
+                                let target_dir =
+                                    target_dir.as_deref().or(self.ws_target_dir.as_deref());
 
                                 Some(
                                     // As `CommandHandle::spawn`'s working directory is
@@ -631,11 +631,14 @@ impl FlycheckActor {
                                     // If `target_dir` is an absolute path, it will replace
                                     // `self.root` and that's an intended behavior.
                                     self.root
-                                        .join(target_dir.unwrap_or(
-                                            Utf8Path::new("target").join("rust-analyzer").as_path(),
-                                        ))
-                                        .join(format!("flycheck{}", self.id))
-                                        .into(),
+                                        .join(
+                                            target_dir.unwrap_or(
+                                                AbsPathBuf::make_absolute(&"target")
+                                                    .join("rust-analyzer")
+                                                    .as_path(),
+                                            ),
+                                        )
+                                        .join(format!("flycheck{}", self.id)),
                                 )
                             }
                             _ => None,
@@ -881,7 +884,7 @@ impl FlycheckActor {
                     && !cargo_options.extra_env.contains_key("RUSTUP_TOOLCHAIN")
                     && std::env::var_os("RUSTUP_TOOLCHAIN").is_none()
                 {
-                    cmd.env("RUSTUP_TOOLCHAIN", AsRef::<std::path::Path>::as_ref(sysroot_root));
+                    cmd.env("RUSTUP_TOOLCHAIN", sysroot_root);
                 }
                 cmd.env("CARGO_LOG", "cargo::core::compiler::fingerprint=info");
                 cmd.arg(&cargo_options.subcommand);
@@ -928,10 +931,7 @@ impl FlycheckActor {
 
                 cmd.arg("--keep-going");
 
-                cargo_options.apply_on_command(
-                    &mut cmd,
-                    self.ws_target_dir.as_ref().map(Utf8PathBuf::as_path),
-                );
+                cargo_options.apply_on_command(&mut cmd, self.ws_target_dir.as_deref());
                 cmd.args(&cargo_options.extra_args);
                 Some((cmd, FlycheckCommandOrigin::Cargo))
             }
@@ -945,7 +945,7 @@ impl FlycheckActor {
                 };
                 let runnable = project_json::Runnable {
                     program: command.clone(),
-                    cwd: Utf8Path::to_owned(root.as_ref()),
+                    cwd: root.clone(),
                     args: args.clone(),
                     kind: project_json::RunnableKind::Flycheck,
                 };
@@ -1033,7 +1033,6 @@ mod tests {
     use super::*;
     use ide_db::FxHashMap;
     use itertools::Itertools;
-    use paths::Utf8Path;
     use project_model::project_json;
 
     #[test]
@@ -1111,7 +1110,7 @@ mod tests {
                     &project_json::Runnable {
                         program: "build".to_owned(),
                         args: Vec::from_iter(args.split_whitespace().map(ToOwned::to_owned)),
-                        cwd: Utf8Path::new("/path").to_owned(),
+                        cwd: AbsPathBuf::make_absolute(&"/path").to_owned(),
                         kind: project_json::RunnableKind::Flycheck,
                     },
                     &FxHashMap::default(),

@@ -3,7 +3,7 @@
 use std::convert::identity;
 use std::thread::Builder;
 use std::time::{Duration, Instant};
-use std::{cell::RefCell, fs::read_to_string, panic::AssertUnwindSafe, path::PathBuf};
+use std::{cell::RefCell, fs::read_to_string, panic::AssertUnwindSafe};
 
 use hir::{ChangeWithProcMacros, Crate};
 use ide::{AnalysisHost, DiagnosticCode, DiagnosticsConfig};
@@ -46,13 +46,16 @@ fn string_to_diagnostic_code_leaky(code: &str) -> DiagnosticCode {
     })
 }
 
-fn detect_errors_from_rustc_stderr_file(p: PathBuf) -> FxHashMap<DiagnosticCode, usize> {
-    let text = read_to_string(p).unwrap();
+#[expect(clippy::disallowed_types, reason = "generic parameter allows for AbsPath")]
+fn detect_errors_from_rustc_stderr_file<P: AsRef<std::path::Path>>(
+    path: P,
+) -> FxHashMap<DiagnosticCode, usize> {
+    let text = read_to_string(path).unwrap();
     let mut result = FxHashMap::default();
     {
         let mut text = &*text;
-        while let Some(p) = text.find("error[E") {
-            text = &text[p + 7..];
+        while let Some(index) = text.find("error[E") {
+            text = &text[index + 7..];
             let code = string_to_diagnostic_code_leaky(&text[..4]);
             *result.entry(code).or_insert(0) += 1;
         }
@@ -62,7 +65,7 @@ fn detect_errors_from_rustc_stderr_file(p: PathBuf) -> FxHashMap<DiagnosticCode,
 
 impl Tester {
     fn new() -> Result<Self> {
-        let mut path = AbsPathBuf::assert_utf8(std::env::temp_dir());
+        let mut path = AbsPathBuf::assert_absolute_and_utf8(std::env::temp_dir());
         path.push("ra-rustc-test");
         let tmp_file = path.join("ra-rustc-test.rs");
         std::fs::write(&tmp_file, "")?;
@@ -123,24 +126,26 @@ impl Tester {
         })
     }
 
-    fn test(&mut self, p: PathBuf) {
-        println!("{}", p.display());
-        if p.parent().unwrap().file_name().unwrap() == "auxiliary" {
+    #[expect(clippy::disallowed_types, reason = "generic parameter allows for AbsPath")]
+    fn test<P: AsRef<std::path::Path>>(&mut self, path: P) {
+        let path = path.as_ref();
+        println!("{}", path.display());
+        if path.parent().unwrap().file_name().unwrap() == "auxiliary" {
             // These are not tests
             return;
         }
-        if IGNORED_TESTS.iter().any(|ig| p.file_name().is_some_and(|x| x == *ig)) {
-            println!("{p:?} IGNORE");
+        if IGNORED_TESTS.iter().any(|ig| path.file_name().is_some_and(|x| x == *ig)) {
+            println!("{path:?} IGNORE");
             self.ignore_count += 1;
             return;
         }
-        let stderr_path = p.with_extension("stderr");
+        let stderr_path = path.with_extension("stderr");
         let expected = if stderr_path.exists() {
             detect_errors_from_rustc_stderr_file(stderr_path)
         } else {
             FxHashMap::default()
         };
-        let text = read_to_string(&p).unwrap();
+        let text = read_to_string(path).unwrap();
         let mut change = ChangeWithProcMacros::default();
         // Ignore unstable tests, since they move too fast and we do not intend to support all of them.
         let mut ignore_test = text.contains("#![feature");
@@ -211,7 +216,7 @@ impl Tester {
         // Ignore tests with diagnostics that we don't emit.
         ignore_test |= expected.keys().any(|k| !SUPPORTED_DIAGNOSTICS.contains(k));
         if ignore_test {
-            println!("{p:?} IGNORE");
+            println!("{path:?} IGNORE");
             self.ignore_count += 1;
         } else if let Some(panic) = panicked {
             match panic {
@@ -223,16 +228,16 @@ impl Tester {
                     {
                         println!("{msg:?} ")
                     }
-                    println!("{p:?} PANIC");
+                    println!("{path:?} PANIC");
                 }
-                Either::Right(_) => println!("{p:?} CANCELLED"),
+                Either::Right(_) => println!("{path:?} CANCELLED"),
             }
             self.fail_count += 1;
         } else if actual == expected {
-            println!("{p:?} PASS");
+            println!("{path:?} PASS");
             self.pass_count += 1;
         } else {
-            println!("{p:?} FAIL");
+            println!("{path:?} FAIL");
             println!("actual   (r-a)   = {actual:?}");
             println!("expected (rustc) = {expected:?}");
             self.fail_count += 1;
@@ -297,26 +302,26 @@ impl flags::RustcTests {
         let mut tester = Tester::new()?;
         let walk_dir = WalkDir::new(self.rustc_repo.join("tests/ui"));
         eprintln!("Running tests for tests/ui");
-        for i in walk_dir {
-            let i = i?;
-            let p = i.into_path();
-            if let Some(f) = &self.filter
-                && !p.as_os_str().to_string_lossy().contains(f)
+        for entry in walk_dir {
+            let entry = entry?;
+            let path = entry.into_path();
+            if let Some(filter) = &self.filter
+                && !path.as_os_str().to_string_lossy().contains(filter)
             {
                 continue;
             }
-            if p.extension().is_none_or(|x| x != "rs") {
+            if path.extension().is_none_or(|extension| extension != "rs") {
                 continue;
             }
-            if let Err(e) = std::panic::catch_unwind({
+            if let Err(error) = std::panic::catch_unwind({
                 let tester = AssertUnwindSafe(&mut tester);
-                let p = p.clone();
+                let path = path.clone();
                 move || {
-                    let _guard = base_db::DbPanicContext::enter(p.display().to_string());
-                    { tester }.0.test(p);
+                    let _guard = base_db::DbPanicContext::enter(path.display().to_string());
+                    { tester }.0.test(path);
                 }
             }) {
-                std::panic::resume_unwind(e);
+                std::panic::resume_unwind(error);
             }
         }
         tester.report();

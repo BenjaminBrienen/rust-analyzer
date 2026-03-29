@@ -10,11 +10,10 @@ extern crate rustc_driver as _;
 
 mod rustc_wrapper;
 
-use std::{env, fs, path::PathBuf, process::ExitCode, sync::Arc};
+use std::{env, fs, process::ExitCode, sync::Arc};
 
 use anyhow::Context;
 use lsp_server::Connection;
-use paths::Utf8PathBuf;
 use rust_analyzer::{
     cli::flags,
     config::{Config, ConfigChange, ConfigErrors},
@@ -47,7 +46,8 @@ fn actual_main() -> anyhow::Result<ExitCode> {
         wait_for_debugger();
     }
 
-    if let Err(e) = setup_logging(flags.log_file.clone()) {
+    let log_file_flag = flags.log_file.as_deref().map(AbsPathBuf::assert);
+    if let Err(e) = setup_logging(log_file_flag) {
         eprintln!("Failed to setup logging: {e:#}");
     }
 
@@ -115,7 +115,7 @@ fn wait_for_debugger() {
     }
 }
 
-fn setup_logging(log_file_flag: Option<PathBuf>) -> anyhow::Result<()> {
+fn setup_logging(log_file_flag: Option<AbsPathBuf>) -> anyhow::Result<()> {
     if cfg!(windows) {
         // This is required so that windows finds our pdb that is placed right beside the exe.
         // By default it doesn't look at the folder the exe resides in, only in the current working
@@ -139,7 +139,11 @@ fn setup_logging(log_file_flag: Option<PathBuf>) -> anyhow::Result<()> {
         }
     }
 
-    let log_file = env::var("RA_LOG_FILE").ok().map(PathBuf::from).or(log_file_flag);
+    let log_file = env::var("RA_LOG_FILE")
+        .ok()
+        .as_ref()
+        .and_then(|env_var| AbsPathBuf::try_make_absolute(env_var).ok())
+        .or(log_file_flag);
     let log_file = match log_file {
         Some(path) => {
             if let Some(parent) = path.parent() {
@@ -147,7 +151,7 @@ fn setup_logging(log_file_flag: Option<PathBuf>) -> anyhow::Result<()> {
             }
             Some(
                 fs::File::create(&path)
-                    .with_context(|| format!("can't create log file at {}", path.display()))?,
+                    .with_context(|| format!("can't create log file at {}", path))?,
             )
         }
         None => None,
@@ -228,15 +232,11 @@ fn run_server() -> anyhow::Result<()> {
 
     let root_path = match root_uri
         .and_then(|it| it.to_file_path().ok())
-        .map(patch_path_prefix)
-        .and_then(|it| Utf8PathBuf::from_path_buf(it).ok())
         .and_then(|it| AbsPathBuf::try_from(it).ok())
+        .map(patch_path_prefix)
     {
         Some(it) => it,
-        None => {
-            let cwd = env::current_dir()?;
-            AbsPathBuf::assert_utf8(cwd)
-        }
+        None => AbsPathBuf::current_working_directory(),
     };
 
     if let Some(client_info) = &client_info {
@@ -252,9 +252,8 @@ fn run_server() -> anyhow::Result<()> {
             workspaces
                 .into_iter()
                 .filter_map(|it| it.uri.to_file_path().ok())
-                .map(patch_path_prefix)
-                .filter_map(|it| Utf8PathBuf::from_path_buf(it).ok())
                 .filter_map(|it| AbsPathBuf::try_from(it).ok())
+                .map(patch_path_prefix)
                 .collect::<Vec<_>>()
         })
         .filter(|workspaces| !workspaces.is_empty())
@@ -325,30 +324,28 @@ fn run_server() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn patch_path_prefix(path: PathBuf) -> PathBuf {
-    use std::path::{Component, Prefix};
+fn patch_path_prefix(path: AbsPathBuf) -> AbsPathBuf {
+    use paths::{Utf8Component, Utf8Prefix};
     if cfg!(windows) {
-        // VSCode might report paths with the file drive in lowercase, but this can mess
+        // VS Code might report paths with the file drive in lowercase, but this can mess
         // with env vars set by tools and build scripts executed by r-a such that it invalidates
-        // cargo's compilations unnecessarily. https://github.com/rust-lang/rust-analyzer/issues/14683
-        // So we just uppercase the drive letter here unconditionally.
+        // cargo's compilations unnecessarily.
+        // See: https://github.com/rust-lang/rust-analyzer/issues/14683
+        // To fix that, we make the drive letter here uppercase unconditionally.
         // (doing it conditionally is a pain because std::path::Prefix always reports uppercase letters on windows)
         let mut comps = path.components();
         match comps.next() {
-            Some(Component::Prefix(prefix)) => {
+            Some(Utf8Component::Prefix(prefix)) => {
                 let prefix = match prefix.kind() {
-                    Prefix::Disk(d) => {
+                    Utf8Prefix::Disk(d) => {
                         format!("{}:", d.to_ascii_uppercase() as char)
                     }
-                    Prefix::VerbatimDisk(d) => {
+                    Utf8Prefix::VerbatimDisk(d) => {
                         format!(r"\\?\{}:", d.to_ascii_uppercase() as char)
                     }
                     _ => return path,
                 };
-                let mut path = PathBuf::new();
-                path.push(prefix);
-                path.extend(comps);
-                path
+                AbsPathBuf::new_unchecked(prefix.into()).join(comps)
             }
             _ => path,
         }

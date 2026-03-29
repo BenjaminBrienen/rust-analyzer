@@ -1,6 +1,5 @@
 //! LSIF (language server index format) generator
 
-use std::env;
 use std::time::Instant;
 
 use ide::{
@@ -296,7 +295,7 @@ impl flags::Lsif {
             num_worker_threads: 1,
             proc_macro_processes: 1,
         };
-        let path = AbsPathBuf::assert_utf8(env::current_dir()?.join(self.path));
+        let path = AbsPathBuf::make_absolute(&self.path);
         let root = ProjectManifest::discover_single(&path)?;
         eprintln!("Generating LSIF for project at {root}");
         let mut workspace = ProjectWorkspace::load(root, cargo_config, no_progress)?;

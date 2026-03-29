@@ -49,6 +49,11 @@
 //! user explores them belongs to that extension (it's totally valid to change
 //! rust-project.json over time via configuration request!)
 
+#![expect(
+    clippy::disallowed_types,
+    reason = "It is better to allow for relative paths during deserialization"
+)]
+
 use base_db::{CrateDisplayName, CrateName};
 use cfg::CfgAtom;
 use paths::{AbsPath, AbsPathBuf, Utf8PathBuf};
@@ -98,7 +103,7 @@ impl ProjectJson {
         base: &AbsPath,
         data: ProjectJsonData,
     ) -> ProjectJson {
-        let absolutize_on_base = |p| base.absolutize(p);
+        let absolutize_on_base = |p| base.join(p);
         let sysroot_src = data.sysroot_src.map(absolutize_on_base);
         let sysroot_project =
             data.sysroot_project.zip(sysroot_src.clone()).map(|(sysroot_data, sysroot_src)| {
@@ -122,9 +127,8 @@ impl ProjectJson {
                         .unwrap_or_else(|| root_module.starts_with(base));
                     let (include, exclude) = match crate_data.source {
                         Some(src) => {
-                            let absolutize = |dirs: Vec<Utf8PathBuf>| {
-                                dirs.into_iter().map(absolutize_on_base).collect::<Vec<_>>()
-                            };
+                            let absolutize =
+                                |dirs: Vec<_>| dirs.into_iter().map(absolutize_on_base).collect();
                             (absolutize(src.include_dirs), absolutize(src.exclude_dirs))
                         }
                         None => (vec![root_module.parent().unwrap().to_path_buf()], Vec::new()),
@@ -133,7 +137,7 @@ impl ProjectJson {
                     let build = match crate_data.build {
                         Some(build) => Some(Build {
                             label: build.label,
-                            build_file: build.build_file,
+                            build_file: AbsPathBuf::make_absolute(&build.build_file),
                             target_kind: build.target_kind.into(),
                         }),
                         None => None,
@@ -216,12 +220,11 @@ impl ProjectJson {
 
     pub fn crate_by_buildfile(&self, path: &AbsPath) -> Option<Build> {
         // this is fast enough for now, but it's unfortunate that this is O(crates).
-        let path: &std::path::Path = path.as_ref();
         self.crates
             .iter()
             .filter(|krate| krate.is_workspace_member)
             .filter_map(|krate| krate.build.as_ref())
-            .find(|build| build.build_file.as_std_path() == path)
+            .find(|build| build.build_file == path)
             .cloned()
     }
 
@@ -300,7 +303,7 @@ pub struct Build {
     /// It is roughly analogous to [`ManifestPath`], but it should *not* be used with
     /// [`crate::ProjectManifest::from_manifest_file`], as the build file may not be
     /// be in the `rust-project.json`.
-    pub build_file: Utf8PathBuf,
+    pub build_file: AbsPathBuf,
     /// The kind of target.
     ///
     /// Examples (non-exhaustively) include [`TargetKind::Bin`], [`TargetKind::Lib`],
@@ -346,7 +349,7 @@ pub struct Runnable {
     /// `{test_id}` with the test name.
     pub args: Vec<String>,
     /// The current working directory of the runnable.
-    pub cwd: Utf8PathBuf,
+    pub cwd: AbsPathBuf,
     pub kind: RunnableKind,
 }
 
@@ -559,7 +562,12 @@ impl From<EditionData> for Edition {
 
 impl From<RunnableData> for Runnable {
     fn from(data: RunnableData) -> Self {
-        Runnable { program: data.program, args: data.args, cwd: data.cwd, kind: data.kind.into() }
+        Runnable {
+            program: data.program,
+            args: data.args,
+            cwd: AbsPathBuf::make_absolute(&data.cwd),
+            kind: data.kind.into(),
+        }
     }
 }
 

@@ -5,12 +5,12 @@
 //! is typically installed with `rustup component add rust-src` command.
 
 use core::fmt;
-use std::{env, fs, ops::Not, path::Path, process::Command};
+use std::{env, fs, ops::Not, process::Command};
 
 use anyhow::{Result, format_err};
 use base_db::Env;
 use itertools::Itertools;
-use paths::{AbsPath, AbsPathBuf, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf};
 use rustc_hash::FxHashMap;
 use stdx::format_to;
 use toolchain::{Tool, probe_for_binary};
@@ -146,16 +146,16 @@ impl Sysroot {
     pub fn tool(
         &self,
         tool: Tool,
-        current_dir: impl AsRef<Path>,
+        current_dir: impl AsRef<AbsPath>,
         envs: &FxHashMap<String, Option<String>>,
     ) -> Command {
+        let current_dir = current_dir.as_ref();
         match self.root() {
             Some(root) => {
                 // special case rustc, we can look that up directly in the sysroot's bin folder
                 // as it should never invoke another cargo binary
                 if let Tool::Rustc = tool
-                    && let Some(path) =
-                        probe_for_binary(root.join("bin").join(Tool::Rustc.name()).into())
+                    && let Some(path) = probe_for_binary(root.join("bin").join(Tool::Rustc.name()))
                 {
                     return toolchain::command(path, current_dir, envs);
                 }
@@ -164,7 +164,7 @@ impl Sysroot {
                 if !envs.contains_key("RUSTUP_TOOLCHAIN")
                     && std::env::var_os("RUSTUP_TOOLCHAIN").is_none()
                 {
-                    cmd.env("RUSTUP_TOOLCHAIN", AsRef::<std::path::Path>::as_ref(root));
+                    cmd.env("RUSTUP_TOOLCHAIN", root);
                 }
 
                 cmd
@@ -173,7 +173,14 @@ impl Sysroot {
         }
     }
 
-    pub fn tool_path(&self, tool: Tool, current_dir: impl AsRef<Path>, envs: &Env) -> Utf8PathBuf {
+    pub fn tool_path(
+        &self,
+        tool: Tool,
+        current_dir: impl AsRef<AbsPath>,
+        envs: &Env,
+    ) -> Option<AbsPathBuf> {
+        let current_dir = current_dir.as_ref();
+
         match self.root() {
             Some(root) => {
                 let mut cmd = toolchain::command(
@@ -184,22 +191,23 @@ impl Sysroot {
                         .map(|(k, v)| (k.clone(), Some(v.clone())))
                         .collect::<FxHashMap<_, _>>(),
                 );
+
                 if !envs.contains_key("RUSTUP_TOOLCHAIN")
                     && std::env::var_os("RUSTUP_TOOLCHAIN").is_none()
                 {
-                    cmd.env("RUSTUP_TOOLCHAIN", AsRef::<std::path::Path>::as_ref(root));
+                    cmd.env("RUSTUP_TOOLCHAIN", root);
                 }
 
                 cmd.arg("which");
                 cmd.arg(tool.name());
-                (|| {
-                    Some(Utf8PathBuf::from(
-                        String::from_utf8(cmd.output().ok()?.stdout).ok()?.trim_end(),
-                    ))
-                })()
-                .unwrap_or_else(|| Utf8PathBuf::from(tool.name()))
+
+                let output = cmd.output().ok()?;
+                let stdout = String::from_utf8(output.stdout).ok()?;
+                let trimmed = stdout.trim_end();
+                if trimmed.is_empty() { None } else { Some(AbsPathBuf::assert(trimmed)) }
             }
-            _ => tool.path(),
+            // discover the tool path in env if no sysroot
+            _ => Some(tool.path()),
         }
     }
 
@@ -209,8 +217,7 @@ impl Sysroot {
             ["libexec", "lib"]
                 .into_iter()
                 .map(|segment| root.join(segment).join("rust-analyzer-proc-macro-srv"))
-                .find_map(|server_path| probe_for_binary(server_path.into()))
-                .map(AbsPathBuf::assert)
+                .find_map(probe_for_binary)
                 .ok_or_else(|| {
                     anyhow::format_err!("cannot find proc-macro server in sysroot `{}`", root)
                 }),
@@ -444,7 +451,7 @@ fn discover_sysroot_dir(
     rustc.current_dir(current_dir).args(["--print", "sysroot"]);
     tracing::debug!("Discovering sysroot by {:?}", rustc);
     let stdout = utf8_stdout(&mut rustc)?;
-    Ok(AbsPathBuf::assert(Utf8PathBuf::from(stdout)))
+    Ok(AbsPathBuf::assert(stdout))
 }
 
 fn discover_rust_lib_src_dir(sysroot_path: &AbsPathBuf) -> Option<AbsPathBuf> {

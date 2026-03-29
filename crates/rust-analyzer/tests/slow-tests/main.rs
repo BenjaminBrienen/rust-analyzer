@@ -42,6 +42,7 @@ use stdx::format_to_acc;
 
 use test_utils::skip_slow_tests;
 use testdir::TestDir;
+use vfs::AbsPathBuf;
 
 use crate::support::{Project, project};
 
@@ -675,11 +676,14 @@ fn test_format_document_range() {
     }
 
     // This test requires a nightly toolchain, so skip if it's not available.
-    let cwd = std::env::current_dir().unwrap_or_default();
-    let has_nightly_rustfmt = toolchain::command("rustfmt", cwd, &FxHashMap::default())
-        .args(["+nightly", "--version"])
-        .output()
-        .is_ok_and(|out| out.status.success());
+    let has_nightly_rustfmt = toolchain::command(
+        "rustfmt",
+        AbsPathBuf::current_working_directory(),
+        &FxHashMap::default(),
+    )
+    .args(["+nightly", "--version"])
+    .output()
+    .is_ok_and(|out| out.status.success());
     if !has_nightly_rustfmt {
         tracing::warn!("skipping test_format_document_range: nightly rustfmt not available");
         return;

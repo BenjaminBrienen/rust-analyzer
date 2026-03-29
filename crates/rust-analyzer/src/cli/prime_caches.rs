@@ -14,8 +14,7 @@ use crate::cli::flags;
 
 impl flags::PrimeCaches {
     pub fn run(self) -> anyhow::Result<()> {
-        let root =
-            vfs::AbsPathBuf::assert_utf8(std::env::current_dir()?.join(&self.path)).normalize();
+        let root = vfs::AbsPathBuf::make_absolute(&self.path);
         let config = crate::config::Config::new(
             root.clone(),
             lsp_types::ClientCapabilities::default(),
@@ -25,9 +24,8 @@ impl flags::PrimeCaches {
         let mut stop_watch = StopWatch::start();
 
         let cargo_config = config.cargo(None);
-        let with_proc_macro_server = if let Some(p) = &self.proc_macro_srv {
-            let path = vfs::AbsPathBuf::assert_utf8(std::env::current_dir()?.join(p));
-            ProcMacroServerChoice::Explicit(path)
+        let with_proc_macro_server = if let Some(path) = &self.proc_macro_srv {
+            ProcMacroServerChoice::Explicit(vfs::AbsPathBuf::make_absolute(&path))
         } else {
             ProcMacroServerChoice::Sysroot
         };
@@ -42,7 +40,7 @@ impl flags::PrimeCaches {
             proc_macro_processes: config.proc_macro_num_processes(),
         };
 
-        let root = AbsPathBuf::assert_utf8(std::env::current_dir()?.join(root));
+        let root = AbsPathBuf::make_absolute(&root);
         let root = ProjectManifest::discover_single(&root)?;
         let workspace = ProjectWorkspace::load(root, &cargo_config, &|_| {})?;
 

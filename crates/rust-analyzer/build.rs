@@ -1,6 +1,8 @@
 //! Construct version in the `commit-hash date channel` format
 
-use std::{env, path::PathBuf, process::Command};
+use std::{env, process::Command};
+
+use paths::AbsPathBuf;
 
 fn main() {
     set_rerun();
@@ -13,14 +15,14 @@ fn main() {
 fn set_rerun() {
     println!("cargo:rerun-if-env-changed=CFG_RELEASE");
 
-    let mut manifest_dir = PathBuf::from(
+    let mut manifest_dir = AbsPathBuf::assert(
         env::var("CARGO_MANIFEST_DIR").expect("`CARGO_MANIFEST_DIR` is always set by cargo."),
     );
 
     while manifest_dir.parent().is_some() {
         let head_ref = manifest_dir.join(".git/HEAD");
-        if head_ref.exists() {
-            println!("cargo:rerun-if-changed={}", head_ref.display());
+        if std::fs::metadata(&head_ref).is_ok() {
+            println!("cargo:rerun-if-changed={}", head_ref);
             return;
         }
 

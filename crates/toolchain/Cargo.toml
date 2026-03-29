@@ -14,7 +14,7 @@ doctest = false
 
 [dependencies]
 home = "0.5.11"
-camino.workspace = true
+paths.workspace = true
 
 [lints]
 workspace = true

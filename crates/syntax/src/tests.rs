@@ -1,11 +1,9 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use ast::HasName;
 use expect_test::expect_file;
 use parser::Edition;
+use paths::{AbsPath, AbsPathBuf};
 use rayon::prelude::*;
 use stdx::format_to_acc;
 use test_utils::{bench, bench_fixture, project_root};
@@ -79,13 +77,13 @@ fn self_hosting_parsing() {
     let crates_dir = project_root().join("crates");
 
     let mut files = Vec::new();
-    let mut work = vec![crates_dir.into_std_path_buf()];
+    let mut work = vec![crates_dir];
     while let Some(dir) = work.pop() {
-        for entry in dir.read_dir().unwrap() {
+        for entry in dir.as_std_path().read_dir().unwrap() {
             let entry = entry.unwrap();
             let file_type = entry.file_type().unwrap();
-            let path = entry.path();
-            let file_name = &path.file_name().unwrap_or_default().to_str().unwrap_or_default();
+            let path = AbsPathBuf::make_absolute(&entry.path());
+            let file_name = &path.file_name().unwrap_or_default();
             let is_hidden = file_name.starts_with('.');
             if !is_hidden {
                 if file_type.is_dir() {
@@ -120,18 +118,18 @@ fn self_hosting_parsing() {
 
     if !errors.is_empty() {
         let errors = errors.into_iter().fold(String::new(), |mut acc, (path, err)| {
-            format_to_acc!(acc, "{}: {:?}\n", path.display(), err[0])
+            format_to_acc!(acc, "{}: {:?}\n", path, err[0])
         });
         panic!("Parsing errors:\n{errors}\n");
     }
 }
 
-fn test_data_dir() -> PathBuf {
-    project_root().into_std_path_buf().join("crates/syntax/test_data")
+fn test_data_dir() -> AbsPathBuf {
+    project_root().join("crates/syntax/test_data")
 }
 
-fn assert_errors_are_present(errors: &[SyntaxError], path: &Path) {
-    assert!(!errors.is_empty(), "There should be errors in the file {:?}", path.display());
+fn assert_errors_are_present(errors: &[SyntaxError], path: &AbsPath) {
+    assert!(!errors.is_empty(), "There should be errors in the file {}", path);
 }
 
 /// Calls callback `f` with input code and file paths for each `.rs` file in `test_data_dir`
@@ -142,19 +140,20 @@ fn assert_errors_are_present(errors: &[SyntaxError], path: &Path) {
 ///
 /// If there is no matching output file it will be created and filled with the
 /// output of `f()`, but the test will fail.
-fn dir_tests<F>(test_data_dir: &Path, paths: &[&str], outfile_extension: &str, f: F)
+fn dir_tests<F>(test_data_dir: &AbsPath, paths: &[&str], outfile_extension: &str, f: F)
 where
-    F: Fn(&str, &Path) -> String,
+    F: Fn(&str, &AbsPath) -> String,
 {
     for (path, input_code) in collect_rust_files(test_data_dir, paths) {
         let actual = f(&input_code, &path);
         let path = path.with_extension(outfile_extension);
-        expect_file![path].assert_eq(&actual)
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        { expect_file![path] }.assert_eq(&actual)
     }
 }
 
 /// Collects all `.rs` files from `dir` subdirectories defined by `paths`.
-fn collect_rust_files(root_dir: &Path, paths: &[&str]) -> Vec<(PathBuf, String)> {
+fn collect_rust_files(root_dir: &AbsPath, paths: &[&str]) -> Vec<(AbsPathBuf, String)> {
     paths
         .iter()
         .flat_map(|path| {
@@ -169,11 +168,11 @@ fn collect_rust_files(root_dir: &Path, paths: &[&str]) -> Vec<(PathBuf, String)>
 }
 
 /// Collects paths to all `.rs` files from `dir` in a sorted `Vec<PathBuf>`.
-fn rust_files_in_dir(dir: &Path) -> Vec<PathBuf> {
+fn rust_files_in_dir(dir: &AbsPath) -> Vec<AbsPathBuf> {
     let mut acc = Vec::new();
     for file in fs::read_dir(dir).unwrap() {
         let file = file.unwrap();
-        let path = file.path();
+        let path = AbsPathBuf::make_absolute(&file.path());
         if path.extension().unwrap_or_default() == "rs" {
             acc.push(path);
         }
@@ -193,7 +192,7 @@ fn rust_files_in_dir(dir: &Path) -> Vec<PathBuf> {
 /// ```
 ///
 /// so this should always be correct.
-fn read_text(path: &Path) -> String {
+fn read_text(path: &AbsPath) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|_| panic!("File at {path:?} should be valid"))
         .replace("\r\n", "\n")

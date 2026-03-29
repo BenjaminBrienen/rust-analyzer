@@ -8,6 +8,7 @@ use project_model::{CargoConfig, RustLibSource};
 use syntax::TextRange;
 
 use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
+use vfs::AbsPathBuf;
 
 use crate::cli::{Result, flags, full_name_of_item};
 
@@ -26,8 +27,12 @@ impl flags::RunTests {
             num_worker_threads: 1,
             proc_macro_processes: 1,
         };
-        let (ref db, _vfs, _proc_macro) =
-            load_workspace_at(&self.path, &cargo_config, &load_cargo_config, &|_| {})?;
+        let (ref db, _vfs, _proc_macro) = load_workspace_at(
+            &AbsPathBuf::make_absolute(&self.path),
+            &cargo_config,
+            &load_cargo_config,
+            &|_| {},
+        )?;
 
         let tests = all_modules(db)
             .into_iter()

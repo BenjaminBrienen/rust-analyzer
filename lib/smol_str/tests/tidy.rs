@@ -1,5 +1,9 @@
 #![allow(clippy::disallowed_methods, clippy::print_stdout)]
 #![cfg(not(miri))]
+#![expect(
+    clippy::disallowed_types,
+    reason = "a dependency on crates/paths does not make sense for this crate"
+)]
 use std::{
     env,
     path::{Path, PathBuf},
@@ -12,6 +16,7 @@ fn project_root() -> PathBuf {
     )
 }
 
+#[expect(clippy::disallowed_types, reason = "this is generic and allows for AbsPath to be used")]
 fn run(cmd: &str, dir: impl AsRef<Path>) -> Result<(), ()> {
     let mut args: Vec<_> = cmd.split_whitespace().collect();
     let bin = args.remove(0);

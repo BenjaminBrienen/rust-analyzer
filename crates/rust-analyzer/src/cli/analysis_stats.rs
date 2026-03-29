@@ -2,7 +2,7 @@
 //! errors.
 
 use std::{
-    env, fmt,
+    fmt,
     ops::AddAssign,
     panic::{AssertUnwindSafe, catch_unwind},
     time::{SystemTime, UNIX_EPOCH},
@@ -71,8 +71,7 @@ impl flags::AnalysisStats {
         let no_progress = &|_| ();
 
         let mut db_load_sw = self.stop_watch();
-
-        let path = AbsPathBuf::assert_utf8(env::current_dir()?.join(&self.path));
+        let path = AbsPathBuf::make_absolute(&self.path);
         let manifest = ProjectManifest::discover_single(&path)?;
 
         let mut workspace = ProjectWorkspace::load(manifest, &cargo_config, no_progress)?;
@@ -84,7 +83,7 @@ impl flags::AnalysisStats {
             } else {
                 match self.proc_macro_srv {
                     Some(ref path) => {
-                        let path = vfs::AbsPathBuf::assert_utf8(path.to_owned());
+                        let path = vfs::AbsPathBuf::assert_absolute_and_utf8(path.to_owned());
                         ProcMacroServerChoice::Explicit(path)
                     }
                     None => ProcMacroServerChoice::Sysroot,

@@ -7,15 +7,11 @@
 //! Hopefully, one day a reliable file watching/walking crate appears on
 //! crates.io, and we can reduce this to trivial glue code.
 
-use std::{
-    fs,
-    path::{Component, Path},
-    sync::atomic::AtomicUsize,
-};
+use std::{fs, sync::atomic::AtomicUsize};
 
 use crossbeam_channel::{Receiver, Sender, select, unbounded};
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use paths::{AbsPath, AbsPathBuf, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf};
 use rayon::iter::{IndexedParallelIterator as _, IntoParallelIterator as _, ParallelIterator};
 use rustc_hash::FxHashSet;
 use vfs::loader::{self, LoadingProgress};
@@ -201,12 +197,7 @@ impl NotifyActor {
                         let files = event
                             .paths
                             .into_iter()
-                            .filter_map(|path| {
-                                Some(
-                                    AbsPathBuf::try_from(Utf8PathBuf::from_path_buf(path).ok()?)
-                                        .expect("path is absolute"),
-                                )
-                            })
+                            .map(AbsPathBuf::assert_absolute_and_utf8) // could do fallible conversion here
                             .filter_map(|path| -> Option<(AbsPathBuf, Option<Vec<u8>>)> {
                                 // Ignore events for files/directories that we're not watching.
                                 if !(self.watched_file_entries.contains(&path)
@@ -251,7 +242,7 @@ impl NotifyActor {
     }
 
     fn load_entry(
-        mut watch: impl FnMut(&Path),
+        mut watch: impl FnMut(&AbsPath),
         entry: loader::Entry,
         do_watch: bool,
         send_message: impl Fn(AbsPathBuf),
@@ -292,10 +283,7 @@ impl NotifyActor {
                         let depth = entry.depth();
                         let is_dir = entry.file_type().is_dir();
                         let is_file = entry.file_type().is_file();
-                        let abs_path = AbsPathBuf::try_from(
-                            Utf8PathBuf::from_path_buf(entry.into_path()).ok()?,
-                        )
-                        .ok()?;
+                        let abs_path = AbsPathBuf::try_make_absolute(&entry.path()).ok()?;
                         if depth < 2 && is_dir {
                             send_message(abs_path.clone());
                         }
@@ -322,9 +310,9 @@ impl NotifyActor {
         }
     }
 
-    fn watch(&mut self, path: &Path) {
+    fn watch(&mut self, path: &AbsPath) {
         if let Some((watcher, _)) = &mut self.watcher {
-            log_notify_error(watcher.watch(path, RecursiveMode::Recursive));
+            log_notify_error(watcher.watch(path.as_std_path(), RecursiveMode::Recursive));
         }
     }
 
@@ -348,14 +336,17 @@ fn log_notify_error<T>(res: notify::Result<T>) -> Option<T> {
 /// heuristic is not sufficient to catch all symlink cycles (it's
 /// possible to construct cycle using two or more symlinks), but it
 /// catches common cases.
-fn path_might_be_cyclic(path: &Path) -> bool {
+#[expect(clippy::disallowed_types, reason = "this is generic and allows for AbsPath")]
+fn path_might_be_cyclic<P: AsRef<std::path::Path>>(path: P) -> bool {
+    let path = path.as_ref();
     let Ok(destination) = std::fs::read_link(path) else {
         return false;
     };
 
     // If the symlink is of the form "../..", it's a parent symlink.
-    let is_relative_parent =
-        destination.components().all(|c| matches!(c, Component::CurDir | Component::ParentDir));
+    let is_relative_parent = destination
+        .components()
+        .all(|c| matches!(c, std::path::Component::CurDir | std::path::Component::ParentDir));
 
     is_relative_parent || path.starts_with(destination)
 }

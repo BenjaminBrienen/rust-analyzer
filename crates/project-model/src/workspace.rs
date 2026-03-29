@@ -13,7 +13,8 @@ use base_db::{
 };
 use cfg::{CfgAtom, CfgDiff, CfgOptions};
 use intern::{Symbol, sym};
-use paths::{AbsPath, AbsPathBuf, Utf8Path, Utf8PathBuf};
+#[expect(clippy::disallowed_types, reason = "deserialize supports a loosely typed interface")]
+use paths::{AbsPath, AbsPathBuf, Utf8PathBuf};
 use rustc_hash::{FxHashMap, FxHashSet};
 use semver::Version;
 use span::{Edition, FileId};
@@ -244,6 +245,10 @@ impl ProjectWorkspace {
         // Resolve the Cargo.toml to the workspace root as we base the `target` dir off of it.
         let mut cmd = sysroot.tool(Tool::Cargo, workspace_dir, extra_env);
         cmd.args(["locate-project", "--workspace", "--manifest-path", cargo_toml.as_str()]);
+        #[expect(
+            clippy::disallowed_types,
+            reason = "deserialize supports a loosely typed interface"
+        )]
         let cargo_toml = &match utf8_stdout(&mut cmd) {
             Ok(output) => {
                 #[derive(serde_derive::Deserialize)]
@@ -474,7 +479,7 @@ impl ProjectWorkspace {
         tracing::info!(workspace = %project_json.manifest_or_root(), src_root = ?sysroot.rust_lib_src_root(), root = ?sysroot.root(), "Using sysroot");
         progress("querying project metadata".to_owned());
         let sysroot_project = project_json.sysroot_project.take();
-        let query_config = QueryConfig::Rustc(&sysroot, project_json.path().as_ref());
+        let query_config = QueryConfig::Rustc(&sysroot, project_json.path());
         let targets = target_tuple::get(query_config, config.target.as_deref(), &config.extra_env)
             .unwrap_or_default();
         let toolchain = version::get(query_config, &config.extra_env).ok().flatten();
@@ -1114,7 +1119,7 @@ fn project_json_to_crate_graph(
                 let target_cfgs = match target.as_deref() {
                     Some(target) => cfg_cache.entry(target).or_insert_with(|| {
                         rustc_cfg::get(
-                            QueryConfig::Rustc(sysroot, project.project_root().as_ref()),
+                            QueryConfig::Rustc(sysroot, project.project_root()),
                             Some(target),
                             extra_env,
                         )
@@ -1310,7 +1315,7 @@ fn cargo_to_crate_graph(
                 } else {
                     Arc::new(pkg_data.manifest.parent().to_path_buf())
                 },
-                &cargo_path,
+                cargo_path.as_deref(),
             );
             if let TargetKind::Lib { .. } = kind {
                 lib_tgt = Some((crate_id, name.clone()));
@@ -1418,7 +1423,7 @@ fn cargo_to_crate_graph(
                 },
                 // FIXME: This looks incorrect but I don't think this causes problems.
                 crate_ws_data,
-                &cargo_path,
+                cargo_path.as_deref(),
             );
         }
     }
@@ -1498,7 +1503,7 @@ fn handle_rustc_crates(
     override_cfg: &CfgOverrides,
     build_scripts: &WorkspaceBuildScripts,
     crate_ws_data: Arc<CrateWorkspaceData>,
-    cargo_path: &Utf8Path,
+    cargo_path: Option<&AbsPath>,
 ) {
     let mut rustc_pkg_crates = FxHashMap::default();
     // The root package of the rustc-dev component is rustc_driver, so we match that
@@ -1612,7 +1617,7 @@ fn add_target_crate_root(
     origin: CrateOrigin,
     crate_ws_data: Arc<CrateWorkspaceData>,
     proc_macro_cwd: Arc<AbsPathBuf>,
-    cargo_path: &Utf8Path,
+    cargo_path: Option<&AbsPath>,
 ) -> CrateBuilderId {
     let edition = pkg.edition;
     let potential_cfg_options = if pkg.features.is_empty() {
@@ -1639,7 +1644,9 @@ fn add_target_crate_root(
 
     let mut env = cargo.env().clone();
     inject_cargo_package_env(&mut env, pkg);
-    inject_cargo_env(&mut env, cargo_path);
+    if let Some(cargo_path) = cargo_path {
+        inject_cargo_env(&mut env, cargo_path);
+    }
     inject_rustc_tool_env(&mut env, cargo_crate_name, kind);
 
     if let Some(envs) = build_data.map(|(it, _)| &it.envs) {

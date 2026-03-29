@@ -1,6 +1,6 @@
 //! SCIP generator
 
-use std::{path::PathBuf, time::Instant};
+use std::time::Instant;
 
 use ide::{
     AnalysisHost, LineCol, Moniker, MonikerDescriptorKind, MonikerIdentifier, MonikerResult,
@@ -12,7 +12,7 @@ use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 use rustc_hash::{FxHashMap, FxHashSet};
 use scip::types::{self as scip_types, SymbolInformation};
 use tracing::error;
-use vfs::FileId;
+use vfs::{AbsPathBuf, FileId};
 
 use crate::{
     cli::flags,
@@ -26,9 +26,7 @@ impl flags::Scip {
         let now = Instant::now();
 
         let no_progress = &|s| eprintln!("rust-analyzer: Loading {s}");
-        let root =
-            vfs::AbsPathBuf::assert_utf8(std::env::current_dir()?.join(&self.path)).normalize();
-
+        let root = vfs::AbsPathBuf::make_absolute(&self.path);
         let mut config = crate::config::Config::new(
             root.clone(),
             lsp_types::ClientCapabilities::default(),
@@ -56,12 +54,8 @@ impl flags::Scip {
             proc_macro_processes: config.proc_macro_num_processes(),
         };
         let cargo_config = config.cargo(None);
-        let (db, vfs, _) = load_workspace_at(
-            root.as_path().as_ref(),
-            &cargo_config,
-            &load_cargo_config,
-            &no_progress,
-        )?;
+        let (db, vfs, _) =
+            load_workspace_at(&root, &cargo_config, &load_cargo_config, &no_progress)?;
         let host = AnalysisHost::with_database(db);
         let db = host.raw_database();
         let analysis = host.analysis();
@@ -281,8 +275,10 @@ impl flags::Scip {
                 eprintln!();
             }
         }
-
-        let out_path = self.output.unwrap_or_else(|| PathBuf::from(r"index.scip"));
+        let out_path = self.output.map_or_else(
+            || AbsPathBuf::make_absolute(&"index.scip"),
+            |output| AbsPathBuf::make_absolute(&output),
+        );
         scip::write_message_to_file(out_path, index)
             .map_err(|err| anyhow::format_err!("Failed to write scip to file: {}", err))?;
 

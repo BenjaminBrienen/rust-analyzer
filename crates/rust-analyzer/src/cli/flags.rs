@@ -1,8 +1,12 @@
 //! Grammar for the command-line arguments.
+
 #![allow(unreachable_pub)]
+#![expect(clippy::disallowed_types, reason = "CLI interface has less strict types")]
+
 use std::{path::PathBuf, str::FromStr};
 
 use ide_ssr::{SsrPattern, SsrRule};
+use paths::Utf8PathBuf;
 
 use crate::cli::Verbosity;
 
@@ -21,7 +25,7 @@ xflags::xflags! {
         optional -q, --quiet
 
         /// Log to the specified file instead of stderr.
-        optional --log-file path: PathBuf
+        optional --log-file path: Utf8PathBuf
         /// Flush log records to the file immediately.
         optional --no-log-buffering
 
@@ -205,7 +209,7 @@ xflags::xflags! {
 pub struct RustAnalyzer {
     pub verbose: u32,
     pub quiet: bool,
-    pub log_file: Option<PathBuf>,
+    pub log_file: Option<Utf8PathBuf>,
     pub no_log_buffering: bool,
     pub wait_dbg: bool,
     pub subcommand: RustAnalyzerCmd,

@@ -96,6 +96,9 @@ syntax-bridge.workspace = true
 
 intern = { path = "../intern", features = ["prevent-gc"] }
 
+[build-dependencies]
+paths.workspace = true
+
 [features]
 jemalloc = ["jemallocator", "profile/jemalloc"]
 force-always-assert = ["stdx/force-always-assert"]

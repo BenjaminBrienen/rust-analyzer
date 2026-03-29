@@ -5,7 +5,7 @@ use cargo_metadata::Metadata;
 use cfg::{CfgAtom, CfgDiff};
 use expect_test::{ExpectFile, expect_file};
 use intern::sym;
-use paths::{AbsPath, AbsPathBuf, Utf8Path, Utf8PathBuf};
+use paths::AbsPathBuf;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use span::FileId;
@@ -92,27 +92,28 @@ fn replace_cargo(s: &mut String) {
     *s = s.replace(&path, "$CARGO$");
 }
 
+/// direction `true` means replacing `$ROOT$` with a real path value.
+/// direction `false` means replacing a real path value with `$ROOT$`.
 fn replace_root(s: &mut String, direction: bool) {
     if direction {
-        let root = if cfg!(windows) { r#"C:\\ROOT\"# } else { "/ROOT/" };
+        let root = if cfg!(windows) { r#"C:\\ROOT\"# } else { "/ROOT" };
         *s = s.replace("$ROOT$", root)
     } else {
-        let root = if cfg!(windows) { r#"C:\\\\ROOT\\"# } else { "/ROOT/" };
+        let root = if cfg!(windows) { r#"C:\\ROOT\"# } else { "/ROOT" };
         *s = s.replace(root, "$ROOT$")
     }
 }
 
-fn get_test_path(file: &str) -> Utf8PathBuf {
-    let base = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+fn get_test_path(file: &str) -> AbsPathBuf {
+    let base = AbsPathBuf::assert(env!("CARGO_MANIFEST_DIR"));
     base.join("test_data").join(file)
 }
 
 fn rooted_project_json(data: ProjectJsonData) -> ProjectJson {
     let mut root = "$ROOT$".to_owned();
     replace_root(&mut root, true);
-    let path = Utf8Path::new(&root);
-    let base = AbsPath::assert(path);
-    ProjectJson::new(None, base, data)
+    let base = AbsPathBuf::make_absolute(&root);
+    ProjectJson::new(None, &base, data)
 }
 
 fn to_crate_graph(
@@ -146,12 +147,11 @@ fn cargo_hello_world_project_model_with_wildcard_overrides() {
     };
     let (crate_graph, _proc_macros) =
         load_cargo_with_overrides("hello-world-metadata.json", cfg_overrides);
-    check_crate_graph(
-        crate_graph,
-        expect_file![
-            "../test_data/output/cargo_hello_world_project_model_with_wildcard_overrides.txt"
-        ],
-    )
+    #[expect(clippy::disallowed_types, reason = "clippy emits warnings from external macros")]
+    let expect = expect_file![
+        "../test_data/output/cargo_hello_world_project_model_with_wildcard_overrides.txt"
+    ];
+    check_crate_graph(crate_graph, expect)
 }
 
 #[test]
@@ -166,30 +166,27 @@ fn cargo_hello_world_project_model_with_selective_overrides() {
     };
     let (crate_graph, _proc_macros) =
         load_cargo_with_overrides("hello-world-metadata.json", cfg_overrides);
-    check_crate_graph(
-        crate_graph,
-        expect_file![
-            "../test_data/output/cargo_hello_world_project_model_with_selective_overrides.txt"
-        ],
-    )
+    #[expect(clippy::disallowed_types, reason = "clippy emits warnings from external macros")]
+    let expect = expect_file![
+        "../test_data/output/cargo_hello_world_project_model_with_selective_overrides.txt"
+    ];
+    check_crate_graph(crate_graph, expect)
 }
 
 #[test]
 fn cargo_hello_world_project_model() {
     let (crate_graph, _proc_macros) = load_cargo("hello-world-metadata.json");
-    check_crate_graph(
-        crate_graph,
-        expect_file!["../test_data/output/cargo_hello_world_project_model.txt"],
-    )
+    #[expect(clippy::disallowed_types, reason = "clippy emits warnings from external macros")]
+    let expect = expect_file!["../test_data/output/cargo_hello_world_project_model.txt"];
+    check_crate_graph(crate_graph, expect)
 }
 
 #[test]
 fn rust_project_hello_world_project_model() {
     let (crate_graph, _proc_macros) = load_rust_project("hello-world-project.json");
-    check_crate_graph(
-        crate_graph,
-        expect_file!["../test_data/output/rust_project_hello_world_project_model.txt"],
-    );
+    #[expect(clippy::disallowed_types, reason = "clippy emits warnings from external macros")]
+    let expect = expect_file!["../test_data/output/rust_project_hello_world_project_model.txt"];
+    check_crate_graph(crate_graph, expect);
 }
 
 #[test]
@@ -201,16 +198,17 @@ fn rust_project_labeled_project_model() {
 #[test]
 fn rust_project_cfg_groups() {
     let (crate_graph, _proc_macros) = load_rust_project("cfg-groups.json");
-    check_crate_graph(crate_graph, expect_file!["../test_data/output/rust_project_cfg_groups.txt"]);
+    #[expect(clippy::disallowed_types, reason = "clippy emits warnings from external macros")]
+    let expect = expect_file!["../test_data/output/rust_project_cfg_groups.txt"];
+    check_crate_graph(crate_graph, expect);
 }
 
 #[test]
 fn rust_project_crate_attrs() {
     let (crate_graph, _proc_macros) = load_rust_project("crate-attrs.json");
-    check_crate_graph(
-        crate_graph,
-        expect_file!["../test_data/output/rust_project_crate_attrs.txt"],
-    );
+    #[expect(clippy::disallowed_types, reason = "clippy emits warnings from external macros")]
+    let expect = expect_file!["../test_data/output/rust_project_crate_attrs.txt"];
+    check_crate_graph(crate_graph, expect);
 }
 
 #[test]
@@ -247,11 +245,10 @@ fn smoke_test_real_sysroot_cargo() {
     let manifest_path =
         ManifestPath::try_from(AbsPathBuf::try_from(meta.workspace_root.clone()).unwrap()).unwrap();
     let cargo_workspace = CargoWorkspace::new(meta, manifest_path, Default::default(), false);
-    let mut sysroot = Sysroot::discover(
-        AbsPath::assert(Utf8Path::new(env!("CARGO_MANIFEST_DIR"))),
-        &Default::default(),
-    );
-    let cwd = AbsPathBuf::assert_utf8(temp_dir().join("smoke_test_real_sysroot_cargo"));
+    let mut sysroot =
+        Sysroot::discover(&AbsPathBuf::assert(env!("CARGO_MANIFEST_DIR")), &Default::default());
+    let cwd =
+        AbsPathBuf::assert_absolute_and_utf8(temp_dir().join("smoke_test_real_sysroot_cargo"));
     std::fs::create_dir_all(&cwd).unwrap();
     let loaded_sysroot =
         sysroot.load_workspace(&RustSourceWorkspaceConfig::default_cargo(), false, &|_| ());

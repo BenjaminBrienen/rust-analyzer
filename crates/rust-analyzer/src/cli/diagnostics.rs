@@ -8,6 +8,7 @@ use hir::{Crate, Module, db::HirDatabase, sym};
 use ide::{AnalysisHost, AssistResolveStrategy, Diagnostic, DiagnosticsConfig, Severity};
 use ide_db::{LineIndexDatabase, base_db::SourceDatabase};
 use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
+use vfs::AbsPathBuf;
 
 use crate::cli::{flags, progress_report::ProgressReport};
 
@@ -31,9 +32,8 @@ impl flags::Diagnostics {
             all_targets: true,
             ..Default::default()
         };
-        let with_proc_macro_server = if let Some(p) = &self.proc_macro_srv {
-            let path = vfs::AbsPathBuf::assert_utf8(std::env::current_dir()?.join(p));
-            ProcMacroServerChoice::Explicit(path)
+        let with_proc_macro_server = if let Some(path) = &self.proc_macro_srv {
+            ProcMacroServerChoice::Explicit(vfs::AbsPathBuf::make_absolute(path))
         } else {
             ProcMacroServerChoice::Sysroot
         };
@@ -44,8 +44,12 @@ impl flags::Diagnostics {
             num_worker_threads: 1,
             proc_macro_processes: 1,
         };
-        let (db, _vfs, _proc_macro) =
-            load_workspace_at(&self.path, &cargo_config, &load_cargo_config, &|_| {})?;
+        let (db, _vfs, _proc_macro) = load_workspace_at(
+            &AbsPathBuf::make_absolute(&self.path),
+            &cargo_config,
+            &load_cargo_config,
+            &|_| {},
+        )?;
         let host = AnalysisHost::with_database(db);
         let db = host.raw_database();
         let analysis = host.analysis();

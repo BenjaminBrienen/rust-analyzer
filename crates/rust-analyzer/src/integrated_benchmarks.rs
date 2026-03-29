@@ -21,7 +21,7 @@ use ide_db::{
 };
 use project_model::CargoConfig;
 use test_utils::project_root;
-use vfs::{AbsPathBuf, VfsPath};
+use vfs::VfsPath;
 
 use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 
@@ -59,19 +59,13 @@ fn integrated_highlighting_benchmark() {
 
     let (db, vfs, _proc_macro) = {
         let _it = stdx::timeit("workspace loading");
-        load_workspace_at(
-            workspace_to_load.as_std_path(),
-            &cargo_config,
-            &load_cargo_config,
-            &|_| {},
-        )
-        .unwrap()
+        load_workspace_at(&workspace_to_load, &cargo_config, &load_cargo_config, &|_| {}).unwrap()
     };
     let mut host = AnalysisHost::with_database(db);
 
     let file_id = {
         let file = workspace_to_load.join(file);
-        let path = VfsPath::from(AbsPathBuf::assert(file));
+        let path = VfsPath::from(file);
         file_id(&vfs, &path)
     };
 
@@ -129,19 +123,13 @@ fn integrated_completion_benchmark() {
 
     let (db, vfs, _proc_macro) = {
         let _it = stdx::timeit("workspace loading");
-        load_workspace_at(
-            workspace_to_load.as_std_path(),
-            &cargo_config,
-            &load_cargo_config,
-            &|_| {},
-        )
-        .unwrap()
+        load_workspace_at(&workspace_to_load, &cargo_config, &load_cargo_config, &|_| {}).unwrap()
     };
     let mut host = AnalysisHost::with_database(db);
 
     let file_id = {
         let file = workspace_to_load.join(file);
-        let path = VfsPath::from(AbsPathBuf::assert(file));
+        let path = VfsPath::from(file);
         file_id(&vfs, &path)
     };
 
@@ -332,19 +320,13 @@ fn integrated_diagnostics_benchmark() {
 
     let (db, vfs, _proc_macro) = {
         let _it = stdx::timeit("workspace loading");
-        load_workspace_at(
-            workspace_to_load.as_std_path(),
-            &cargo_config,
-            &load_cargo_config,
-            &|_| {},
-        )
-        .unwrap()
+        load_workspace_at(&workspace_to_load, &cargo_config, &load_cargo_config, &|_| {}).unwrap()
     };
     let mut host = AnalysisHost::with_database(db);
 
     let file_id = {
         let file = workspace_to_load.join(file);
-        let path = VfsPath::from(AbsPathBuf::assert(file));
+        let path = VfsPath::from(file);
         file_id(&vfs, &path)
     };
 

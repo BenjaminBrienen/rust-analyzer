@@ -6,15 +6,14 @@ use std::{
     fmt,
     io::{self, BufWriter, Write},
     marker::PhantomData,
-    path::PathBuf,
     process::{ChildStderr, ChildStdout, Command, Stdio},
 };
 
 use anyhow::Context;
 use crossbeam_channel::Sender;
-use paths::Utf8PathBuf;
 use process_wrap::std::{StdChildWrapper, StdCommandWrap};
 use stdx::process::streaming_output;
+use vfs::AbsPathBuf;
 
 /// This trait abstracts parsing one line of JSON output into a Rust
 /// data type.
@@ -46,7 +45,7 @@ impl<T: Sized + Send + 'static> CommandActor<T> {
 }
 
 impl<T: Sized + Send + 'static> CommandActor<T> {
-    fn run(self, outfile: Option<Utf8PathBuf>) -> io::Result<(bool, String)> {
+    fn run(self, outfile: Option<AbsPathBuf>) -> io::Result<(bool, String)> {
         // We manually read a line at a time, instead of using serde's
         // stream deserializers, because the deserializer cannot recover
         // from an error, resulting in it getting stuck, because we try to
@@ -137,7 +136,7 @@ pub(crate) struct CommandHandle<T> {
     thread: stdx::thread::JoinHandle<io::Result<(bool, String)>>,
     program: OsString,
     arguments: Vec<OsString>,
-    current_dir: Option<PathBuf>,
+    current_dir: Option<AbsPathBuf>,
     _phantom: PhantomData<T>,
 }
 
@@ -156,13 +155,13 @@ impl<T: Sized + Send + 'static> CommandHandle<T> {
         mut command: Command,
         parser: impl JsonLinesParser<T>,
         sender: Sender<T>,
-        out_file: Option<Utf8PathBuf>,
+        out_file: Option<AbsPathBuf>,
     ) -> anyhow::Result<Self> {
         command.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::null());
 
         let program = command.get_program().into();
         let arguments = command.get_args().map(|arg| arg.into()).collect::<Vec<OsString>>();
-        let current_dir = command.get_current_dir().map(|arg| arg.to_path_buf());
+        let current_dir = command.get_current_dir().as_ref().map(AbsPathBuf::make_absolute);
 
         let mut child = StdCommandWrap::from(command);
         #[cfg(unix)]

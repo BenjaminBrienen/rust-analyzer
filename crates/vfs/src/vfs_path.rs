@@ -28,7 +28,7 @@ impl VfsPath {
     /// Create a path from string. Input should be a string representation of
     /// an absolute path inside filesystem
     pub fn new_real_path(path: String) -> VfsPath {
-        VfsPath::from(AbsPathBuf::assert(path.into()))
+        VfsPath::from(AbsPathBuf::assert(&path))
     }
 
     /// Returns the `AbsPath` representation of `self` if `self` is on the file system.
@@ -343,10 +343,7 @@ impl VirtualPath {
     }
 
     fn strip_prefix(&self, base: &VirtualPath) -> Option<&RelPath> {
-        <_ as AsRef<paths::Utf8Path>>::as_ref(&self.0)
-            .strip_prefix(&base.0)
-            .ok()
-            .map(RelPath::new_unchecked)
+        self.0.strip_prefix(&base.0).map(RelPath::new_unchecked_from_str)
     }
 
     /// Remove the last component of `self`.

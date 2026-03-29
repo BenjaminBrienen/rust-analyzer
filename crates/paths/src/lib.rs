@@ -1,11 +1,13 @@
 //! Thin wrappers around [`camino::Utf8PathBuf`], distinguishing
 //! between absolute and relative paths.
 
+#![expect(clippy::disallowed_types, reason = "this crate defines the better type")]
+
 use std::{
     borrow::Borrow,
     ffi::OsStr,
     fmt, ops,
-    path::{Path, PathBuf},
+    path::{self, Path, PathBuf},
 };
 
 pub use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf, Utf8Prefix};
@@ -80,6 +82,48 @@ impl TryFrom<&str> for AbsPathBuf {
     }
 }
 
+impl TryFrom<String> for AbsPathBuf {
+    type Error = Utf8PathBuf;
+    fn try_from(path: String) -> Result<AbsPathBuf, Utf8PathBuf> {
+        AbsPathBuf::try_from(Utf8PathBuf::from(path))
+    }
+}
+
+impl TryFrom<PathBuf> for AbsPathBuf {
+    type Error = PathBuf;
+    fn try_from(path: PathBuf) -> Result<AbsPathBuf, PathBuf> {
+        let utf8 = Utf8PathBuf::from_path_buf(path.clone())?;
+        if !utf8.is_absolute() {
+            return Err(path);
+        }
+        Ok(AbsPathBuf(utf8))
+    }
+}
+
+impl<'a> TryFrom<&'a Path> for &'a AbsPath {
+    type Error = &'a Path;
+    fn try_from(path: &'a Path) -> Result<Self, &'a Path> {
+        let Some(utf8) = Utf8Path::from_path(path) else {
+            return Err(path);
+        };
+        if !utf8.is_absolute() {
+            return Err(path);
+        }
+        Ok(AbsPath::assert(utf8))
+    }
+}
+
+impl<'a> TryFrom<&'a str> for &'a AbsPath {
+    type Error = &'a str;
+    fn try_from(path: &'a str) -> Result<&'a AbsPath, &'a str> {
+        let utf8_path = Utf8Path::new(path);
+        if !utf8_path.is_absolute() {
+            return Err(path);
+        }
+        Ok(AbsPath::assert(utf8_path))
+    }
+}
+
 impl<P: AsRef<Path> + ?Sized> PartialEq<P> for AbsPathBuf {
     fn eq(&self, other: &P) -> bool {
         self.0.as_std_path() == other.as_ref()
@@ -87,12 +131,35 @@ impl<P: AsRef<Path> + ?Sized> PartialEq<P> for AbsPathBuf {
 }
 
 impl AbsPathBuf {
+    /// # Panics if cwd cannot be accessed
+    pub fn current_working_directory() -> AbsPathBuf {
+        Self::make_absolute(&std::env::current_dir().unwrap())
+    }
+
+    /// Constructs an `AbsPathBuf` from a path-like type by resolving it to an absolute path.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cwd could not be accessed or if the path is not valid utf-8.
+    pub fn make_absolute<P: ?Sized + AsRef<Path> + std::fmt::Debug>(path: &P) -> AbsPathBuf {
+        path::absolute(path).map(AbsPathBuf::assert_absolute_and_utf8).unwrap().normalize()
+    }
+
+    /// Constructs an `AbsPathBuf` from a path-like type by resolving it to an absolute path.
+    /// Gives an error if the cwd could not be accessed or if the path is not valid utf-8.
+    pub fn try_make_absolute<P: ?Sized + AsRef<Path>>(path: &P) -> Result<AbsPathBuf, &P> {
+        let absolute = path::absolute(path).map_err(|_| path)?;
+        let utf8 = Utf8PathBuf::from_path_buf(absolute).map_err(|_| path)?;
+        let absolute = AbsPathBuf(utf8);
+        Ok(absolute)
+    }
+
     /// Wrap the given absolute path in `AbsPathBuf`
     ///
     /// # Panics
     ///
     /// Panics if `path` is not absolute.
-    pub fn assert(path: Utf8PathBuf) -> AbsPathBuf {
+    pub fn assert2(path: Utf8PathBuf) -> AbsPathBuf {
         AbsPathBuf::try_from(path)
             .unwrap_or_else(|path| panic!("expected absolute path, got {path}"))
     }
@@ -102,8 +169,21 @@ impl AbsPathBuf {
     /// # Panics
     ///
     /// Panics if `path` is not absolute.
-    pub fn assert_utf8(path: PathBuf) -> AbsPathBuf {
-        AbsPathBuf::assert(
+    pub fn assert(path: impl AsRef<str>) -> AbsPathBuf {
+        Self::assert2(path.as_ref().into())
+    }
+
+    pub fn new_unchecked(path: Utf8PathBuf) -> AbsPathBuf {
+        AbsPathBuf(path)
+    }
+
+    /// Wrap the given absolute path in `AbsPathBuf`
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is not absolute.
+    pub fn assert_absolute_and_utf8(path: PathBuf) -> AbsPathBuf {
+        AbsPathBuf::assert2(
             Utf8PathBuf::from_path_buf(path)
                 .unwrap_or_else(|path| panic!("expected utf8 path, got {}", path.display())),
         )
@@ -113,7 +193,7 @@ impl AbsPathBuf {
     ///
     /// Equivalent of [`Utf8PathBuf::as_path`] for `AbsPathBuf`.
     pub fn as_path(&self) -> &AbsPath {
-        AbsPath::assert(self.0.as_path())
+        AbsPath::new_unchecked(self.0.as_path())
     }
 
     /// Equivalent of [`Utf8PathBuf::pop`] for `AbsPathBuf`.
@@ -143,7 +223,71 @@ impl AbsPathBuf {
     }
 
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> Self {
-        Self(self.0.join(path))
+        Self(self.0.join(path)).normalize()
+    }
+
+    pub fn with_extension(&self, extension: &str) -> AbsPathBuf {
+        AbsPathBuf::assert2(self.0.with_extension(extension))
+    }
+
+    pub fn set_extension(&mut self, extension: &str) -> bool {
+        self.0.set_extension(extension)
+    }
+
+    pub fn is_file(&self) -> bool {
+        self.0.is_file()
+    }
+
+    /// Converts a [`AbsPathBuf`] to a [`Utf8PathBuf`].
+    ///
+    /// This is equivalent to the [`From<AbsPathBuf> for Utf8PathBuf`][from] implementation,
+    /// but may aid in type inference.
+    ///
+    /// [from]: #impl-From<AbsPathBuf>-for-Utf8PathBuf
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use paths::AbsPathBuf;
+    /// use camino::Utf8PathBuf;
+    ///
+    /// let abs_path_buf: AbsPathBuf = "/foo.txt".try_into().unwrap();
+    /// let utf8_path_buf = abs_path_buf.into_utf8_path_buf();
+    /// assert_eq!(utf8_path_buf.as_str(), "/foo.txt");
+    ///
+    /// // Convert back to an AbsPathBuf.
+    /// let new_abs_path_buf = AbsPathBuf::assert(utf8_path_buf);
+    /// assert_eq!(new_abs_path_buf, "/foo.txt");
+    /// ```
+    #[must_use = "`self` will be dropped if the result is not used"]
+    pub fn into_utf8_path_buf(self) -> Utf8PathBuf {
+        self.into()
+    }
+
+    /// Converts a [`AbsPathBuf`] to a [`PathBuf`].
+    ///
+    /// This is equivalent to the [`From<AbsPathBuf> for PathBuf`][from] implementation,
+    /// but may aid in type inference.
+    ///
+    /// [from]: #impl-From<AbsPathBuf>-for-PathBuf
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use paths::AbsPathBuf;
+    /// use std::path::PathBuf;
+    ///
+    /// let abs_path_buf: AbsPathBuf = "/foo.txt".try_into().unwrap();
+    /// let std_path_buf = abs_path_buf.into_std_path_buf();
+    /// assert_eq!(std_path_buf.to_str(), Some("/foo.txt"));
+    ///
+    /// // Convert back to a AbsPathBuf.
+    /// let new_abs_path_buf = AbsPathBuf::assert_absolute_and_utf8(std_path_buf);
+    /// assert_eq!(new_abs_path_buf, "/foo.txt");
+    /// ```
+    #[must_use = "`self` will be dropped if the result is not used"]
+    pub fn into_std_path_buf(self) -> PathBuf {
+        self.into()
     }
 }
 
@@ -161,6 +305,12 @@ pub struct AbsPath(Utf8Path);
 impl<P: AsRef<Path> + ?Sized> PartialEq<P> for AbsPath {
     fn eq(&self, other: &P) -> bool {
         self.0.as_std_path() == other.as_ref()
+    }
+}
+
+impl AsRef<AbsPath> for AbsPath {
+    fn as_ref(&self) -> &AbsPath {
+        self
     }
 }
 
@@ -200,7 +350,28 @@ impl<'a> TryFrom<&'a Utf8Path> for &'a AbsPath {
     }
 }
 
+impl<'a> TryFrom<&'a OsStr> for &'a AbsPath {
+    type Error = &'a OsStr;
+    fn try_from(path: &'a OsStr) -> Result<&'a AbsPath, &'a OsStr> {
+        let utf8path: &Utf8Path = path.try_into().map_err(|_| path)?;
+        if !utf8path.is_absolute() {
+            return Err(path);
+        }
+        Ok(AbsPath::assert(utf8path))
+    }
+}
+
 impl AbsPath {
+    /// Creates a new [`AbsPath`] from `path`, assuming that it is absolute.
+    pub fn new_unchecked(path: &Utf8Path) -> &AbsPath {
+        // SAFETY: This is safe because `path` is a valid reference and repr(transparent).
+        unsafe { &*(path as *const Utf8Path as *const AbsPath) }
+    }
+
+    pub fn as_utf8_path(&self) -> &Utf8Path {
+        &self.0
+    }
+
     /// Wrap the given absolute path in `AbsPath`
     ///
     /// # Panics
@@ -211,19 +382,26 @@ impl AbsPath {
         unsafe { &*(path as *const Utf8Path as *const AbsPath) }
     }
 
+    /// Wrap the given absolute path in `AbsPath`
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is not absolute.
+    pub fn assert_absolute_and_utf8<P: ?Sized + AsRef<Path>>(path: &P) -> &AbsPath {
+        let path = path.as_ref();
+        let path: &Utf8Path = path.try_into().unwrap();
+        assert!(path.is_absolute(), "{path} is not absolute");
+        unsafe { &*(path as *const Utf8Path as *const AbsPath) }
+    }
+
     /// Equivalent of [`Utf8Path::parent`] for `AbsPath`.
     pub fn parent(&self) -> Option<&AbsPath> {
         self.0.parent().map(AbsPath::assert)
     }
 
-    /// Equivalent of [`Utf8Path::join`] for `AbsPath` with an additional normalize step afterwards.
-    pub fn absolutize(&self, path: impl AsRef<Utf8Path>) -> AbsPathBuf {
-        self.join(path).normalize()
-    }
-
     /// Equivalent of [`Utf8Path::join`] for `AbsPath`.
     pub fn join(&self, path: impl AsRef<Utf8Path>) -> AbsPathBuf {
-        Utf8Path::join(self.as_ref(), path).try_into().unwrap()
+        AbsPathBuf::assert(Utf8Path::join(self.as_ref(), path)).normalize()
     }
 
     /// Normalize the given path:
@@ -242,11 +420,14 @@ impl AbsPath {
         AbsPathBuf(normalize_path(&self.0))
     }
 
-    /// Equivalent of [`Utf8Path::to_path_buf`] for `AbsPath`.
+    /// Converts an [`AbsPath`] to an owned [`AbsPathBuf`].
     pub fn to_path_buf(&self) -> AbsPathBuf {
         AbsPathBuf::try_from(self.0.to_path_buf()).unwrap()
     }
 
+    #[deprecated(
+        note = "We explicitly do not provide canonicalization API, as that is almost always a wrong solution, see #14430"
+    )]
     pub fn canonicalize(&self) -> ! {
         panic!(
             "We explicitly do not provide canonicalization API, as that is almost always a wrong solution, see #14430"
@@ -280,25 +461,54 @@ impl AbsPath {
     // For `AbsPath`, we want to make sure that this is a POD type, and that all
     // IO goes via `fs`. That way, it becomes easier to mock IO when we need it.
 
+    /// Returns the final component of the [`AbsPath`], if there is one.
+    ///
+    /// If the path is a normal file, this is the file name.
+    /// If it is the path of a directory, this is the directory name.
+    ///
+    /// Returns [`None`] if the path terminates in `..`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use paths::AbsPath;
+    ///
+    /// assert_eq!(Some("bin"), AbsPath::try_from("/usr/bin/").unwrap().file_name());
+    /// assert_eq!(Some("foo.txt"), AbsPath::try_from("tmp/foo.txt").unwrap().file_name());
+    /// assert_eq!(Some("foo.txt"), AbsPath::try_from("foo.txt/.").unwrap().file_name());
+    /// assert_eq!(Some("foo.txt"), AbsPath::try_from("foo.txt/.//").unwrap().file_name());
+    /// assert_eq!(None, AbsPath::try_from("/foo.txt/..").unwrap().file_name());
+    /// assert_eq!(None, AbsPath::try_from("/").file_name());
+    /// ```
     pub fn file_name(&self) -> Option<&str> {
         self.0.file_name()
     }
+
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }
+
+    pub fn with_extension(&self, extension: impl AsRef<str>) -> AbsPathBuf {
+        AbsPathBuf::new_unchecked(self.0.with_extension(extension))
+    }
+
     pub fn file_stem(&self) -> Option<&str> {
         self.0.file_stem()
     }
+
     pub fn as_os_str(&self) -> &OsStr {
         self.0.as_os_str()
     }
+
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
+
     #[deprecated(note = "use Display instead")]
     pub fn display(&self) -> ! {
         unimplemented!()
     }
+
     #[deprecated(note = "use std::fs::metadata().is_ok() instead")]
     pub fn exists(&self) -> ! {
         unimplemented!()
@@ -306,6 +516,35 @@ impl AbsPath {
 
     pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
+    }
+
+    pub fn is_file(&self) -> bool {
+        self.0.is_file()
+    }
+
+    /// Converts an [`AbsPath`] to a [`Path`].
+    ///
+    /// This is equivalent to the [`AsRef<Path> for AbsPathBuf`][asref] implementation,
+    /// but may aid in type inference.
+    ///
+    /// [asref]: AbsPathBuf#impl-AsRef<Path>-for-AbsPathBuf
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use paths::AbsPath;
+    /// use std::path::Path;
+    ///
+    /// let abs_path: &AbsPath = "/foo.txt".try_into().unwrap();
+    /// let std_path: &Path = abs_path.as_std_path();
+    /// assert_eq!(std_path.to_str(), Some("/foo.txt"));
+    ///
+    /// // Convert back to a AbsPath.
+    /// let new_abs_path = AbsPath::assert_absolute_and_utf8(std_path);
+    /// assert_eq!(new_abs_path, "/foo.txt");
+    /// ```
+    pub fn as_std_path(&self) -> &path::Path {
+        self.0.as_std_path()
     }
     // endregion:delegate-methods
 }
@@ -369,6 +608,44 @@ impl RelPathBuf {
     pub fn as_path(&self) -> &RelPath {
         RelPath::new_unchecked(self.0.as_path())
     }
+
+    /// Wrap the given relative path in `AbsPathBuf`
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is not relative.
+    pub fn assert_relative_and_utf8(path: PathBuf) -> RelPathBuf {
+        RelPathBuf::assert(
+            Utf8PathBuf::from_path_buf(path)
+                .unwrap_or_else(|path| panic!("expected utf8 path, got {}", path.display())),
+        )
+    }
+
+    /// Wrap the given relative path in `RelPathBuf`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is not relative.
+    pub fn assert(path: Utf8PathBuf) -> RelPathBuf {
+        RelPathBuf::try_from(path)
+            .unwrap_or_else(|path| panic!("expected relative path, got {path}"))
+    }
+
+    /// Wrap the given relative path in `RelPathBuf`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `path` is not relative.
+    pub fn assert_str(path: &str) -> RelPathBuf {
+        RelPathBuf::try_from(path)
+            .unwrap_or_else(|path| panic!("expected relative path, got {path}"))
+    }
+}
+
+impl fmt::Display for RelPathBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
 }
 
 /// Wrapper around a relative [`Utf8Path`].
@@ -389,9 +666,16 @@ impl AsRef<Path> for RelPath {
 }
 
 impl RelPath {
-    /// Creates a new `RelPath` from `path`, without checking if it is relative.
+    /// Creates a new [`RelPath`] from `path`, without checking if it is relative.
     pub fn new_unchecked(path: &Utf8Path) -> &RelPath {
+        // SAFETY: This is safe because `path` is a valid reference and repr(transparent).
         unsafe { &*(path as *const Utf8Path as *const RelPath) }
+    }
+
+    /// Creates a new [`RelPath`] from `&str`, without checking if it is relative.
+    pub fn new_unchecked_from_str(path: &str) -> &RelPath {
+        // SAFETY: This is safe because `path` is a valid reference and repr(transparent).
+        unsafe { &*(path as *const str as *const RelPath) }
     }
 
     /// Equivalent of [`Utf8Path::to_path_buf`] for `RelPath`.
@@ -405,6 +689,12 @@ impl RelPath {
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+impl fmt::Display for RelPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
