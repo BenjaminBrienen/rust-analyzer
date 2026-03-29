@@ -82,7 +82,7 @@ pub(crate) fn expand(
     def_site: Span,
     call_site: Span,
     mixed_site: Span,
-    current_dir: String,
+    current_dir: &AbsPath,
 ) -> Result<Result<tt::TopSubtree, String>, crate::ServerError> {
     let version = process.version();
     let mut span_data_table = SpanDataIndexMap::default();
@@ -109,7 +109,7 @@ pub(crate) fn expand(
         },
         lib: proc_macro.dylib_path.to_path_buf().into(),
         env,
-        current_dir: Some(current_dir),
+        current_dir: Some(current_dir.to_string()),
     };
 
     let response = send_task(process, Request::ExpandMacro(Box::new(task)))?;

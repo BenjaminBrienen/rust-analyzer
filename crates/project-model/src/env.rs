@@ -1,6 +1,6 @@
 //! Cargo-like environment variables injection.
 use base_db::Env;
-use paths::Utf8Path;
+use paths::AbsPath;
 use rustc_hash::FxHashMap;
 
 use crate::{PackageData, TargetKind, cargo_config_file::CargoConfigFile};
@@ -47,7 +47,7 @@ pub(crate) fn inject_cargo_package_env(env: &mut Env, package: &PackageData) {
     );
 }
 
-pub(crate) fn inject_cargo_env(env: &mut Env, cargo_path: &Utf8Path) {
+pub(crate) fn inject_cargo_env(env: &mut Env, cargo_path: &AbsPath) {
     env.set("CARGO", cargo_path.as_str());
 }
 
@@ -118,10 +118,7 @@ pub(crate) fn cargo_config_env(
 fn parse_output_cargo_config_env_works() {
     use itertools::Itertools;
 
-    let cwd = paths::AbsPathBuf::try_from(
-        paths::Utf8PathBuf::try_from(std::env::current_dir().unwrap()).unwrap(),
-    )
-    .unwrap();
+    let cwd = paths::AbsPathBuf::current_working_directory();
     let config_path = cwd.join(".cargo").join("config.toml");
     let raw = r#"
 env.CARGO_WORKSPACE_DIR.relative = true

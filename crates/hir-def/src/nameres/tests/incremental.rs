@@ -4,6 +4,7 @@ use base_db::{
 };
 use expect_test::{Expect, expect};
 use intern::Symbol;
+use paths::AbsPathBuf;
 use span::Edition;
 use test_fixture::WithFixture;
 use triomphe::Arc;
@@ -78,13 +79,7 @@ pub const BAZ: u32 = 0;
                 CrateOrigin::Local { repo: None, name: Some(Symbol::intern(crate_name)) },
                 Vec::new(),
                 false,
-                Arc::new(
-                    // FIXME: This is less than ideal
-                    TryFrom::try_from(
-                        &*std::env::current_dir().unwrap().as_path().to_string_lossy(),
-                    )
-                    .unwrap(),
-                ),
+                Arc::new(AbsPathBuf::current_working_directory()),
                 Arc::new(CrateWorkspaceData { target: Err("".into()), toolchain: None }),
             )
         };

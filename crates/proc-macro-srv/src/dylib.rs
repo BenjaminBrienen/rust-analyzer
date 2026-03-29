@@ -9,7 +9,7 @@ use temp_dir::TempDir;
 
 use libloading::Library;
 use object::Object;
-use paths::{Utf8Path, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf};
 
 use crate::{
     PanicMessage, ProcMacroClientHandle, ProcMacroKind, ProcMacroSrvSpan,
@@ -24,7 +24,7 @@ pub(crate) struct Expander {
 impl Expander {
     pub(crate) fn new(
         temp_dir: &TempDir,
-        lib: &Utf8Path,
+        lib: &AbsPath,
     ) -> Result<Expander, LoadProcMacroDylibError> {
         // Some libraries for dynamic loading require canonicalized path even when it is
         // already absolute
@@ -104,7 +104,7 @@ struct ProcMacroLibrary {
 }
 
 impl ProcMacroLibrary {
-    fn open(path: &Utf8Path) -> Result<Self, LoadProcMacroDylibError> {
+    fn open(path: &AbsPath) -> Result<Self, LoadProcMacroDylibError> {
         let file = fs::File::open(path)?;
         #[allow(clippy::undocumented_unsafe_blocks)] // FIXME
         let file = unsafe { memmap2::Mmap::map(&file) }?;
@@ -168,7 +168,7 @@ fn find_registrar_symbol(obj: &object::File<'_>) -> object::Result<Option<String
 #[cfg(windows)]
 fn ensure_file_with_lock_free_access(
     temp_dir: &TempDir,
-    path: &Utf8Path,
+    path: &AbsPath,
 ) -> io::Result<Utf8PathBuf> {
     use std::collections::hash_map::RandomState;
     use std::hash::{BuildHasher, Hasher};
@@ -177,7 +177,7 @@ fn ensure_file_with_lock_free_access(
         return Ok(path.to_path_buf());
     }
 
-    let mut to = Utf8Path::from_path(temp_dir.path()).unwrap().to_owned();
+    let mut to = AbsPath::from_path(temp_dir.path()).unwrap().to_owned();
 
     let file_name = path.file_stem().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidInput, format!("File path is invalid: {path}"))
@@ -196,7 +196,7 @@ fn ensure_file_with_lock_free_access(
 #[cfg(unix)]
 fn ensure_file_with_lock_free_access(
     _temp_dir: &TempDir,
-    path: &Utf8Path,
+    path: &AbsPath,
 ) -> io::Result<Utf8PathBuf> {
     Ok(path.to_owned())
 }
@@ -216,7 +216,7 @@ fn ensure_file_with_lock_free_access(
 ///
 /// The caller is responsible for ensuring that the path is valid proc-macro library
 #[cfg(windows)]
-unsafe fn load_library(file: &Utf8Path) -> Result<Library, libloading::Error> {
+unsafe fn load_library(file: &AbsPath) -> Result<Library, libloading::Error> {
     // SAFETY: The caller is responsible for ensuring that the path is valid proc-macro library
     unsafe { Library::new(file) }
 }
@@ -236,7 +236,7 @@ unsafe fn load_library(file: &Utf8Path) -> Result<Library, libloading::Error> {
 ///
 /// The caller is responsible for ensuring that the path is valid proc-macro library
 #[cfg(unix)]
-unsafe fn load_library(file: &Utf8Path) -> Result<Library, libloading::Error> {
+unsafe fn load_library(file: &AbsPath) -> Result<Library, libloading::Error> {
     // not defined by POSIX, different values on mips vs other targets
     #[cfg(target_env = "gnu")]
     use libc::RTLD_DEEPBIND;

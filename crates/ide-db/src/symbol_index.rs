@@ -752,7 +752,11 @@ pub(self) use crate::Trait as IsThisJustATrait;
             })
             .collect();
 
-        expect_file!["./test_data/test_symbol_index_collection.txt"].assert_debug_eq(&symbols);
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file!["./test_data/test_symbol_index_collection.txt"] }.assert_debug_eq(&symbols);
     }
 
     #[test]
@@ -779,7 +783,11 @@ struct Duplicate;
             })
             .collect();
 
-        expect_file!["./test_data/test_doc_alias.txt"].assert_debug_eq(&symbols);
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file!["./test_data/test_doc_alias.txt"] }.assert_debug_eq(&symbols);
     }
 
     #[test]
@@ -802,11 +810,19 @@ pub struct Foo;
         let mut query = Query::new("Foo".to_owned());
         let mut symbols = world_symbols(&db, query.clone());
         symbols.sort_by_key(|x| x.is_import);
-        expect_file!["./test_data/test_symbols_with_imports.txt"].assert_debug_eq(&symbols);
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file!["./test_data/test_symbols_with_imports.txt"] }.assert_debug_eq(&symbols);
 
         query.exclude_imports();
         let symbols = world_symbols(&db, query);
-        expect_file!["./test_data/test_symbols_exclude_imports.txt"].assert_debug_eq(&symbols);
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file!["./test_data/test_symbols_exclude_imports.txt"] }.assert_debug_eq(&symbols);
     }
 
     #[test]

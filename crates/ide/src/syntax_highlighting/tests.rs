@@ -44,7 +44,10 @@ enum Foo {
     Bar
 }
 "#,
-        expect_file!["./test_data/highlight_attributes.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_attributes.html"]
+        },
         false,
     );
 }
@@ -133,7 +136,10 @@ use self::foo as bar;
 #[proc_macro_attribute]
 pub fn proc_macro() {}
 "#,
-        expect_file!["./test_data/highlight_macros.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_macros.html"]
+        },
         false,
     );
 }
@@ -352,7 +358,10 @@ macro_rules! die {
     };
 }
 "#,
-        expect_file!["./test_data/highlight_general.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_general.html"]
+        },
         false,
     );
 }
@@ -374,7 +383,10 @@ where
     'static: 'static
 {}
 "#,
-        expect_file!["./test_data/highlight_lifetimes.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_lifetimes.html"]
+        },
         false,
     );
 }
@@ -413,7 +425,10 @@ void!(macro_rules, union, default, raw, auto, yeet);
 void!(abstract become box do final macro override priv typeof unsized virtual yield);
 void!('static 'self 'unsafe)
 "#),
-            expect_file![format!("./test_data/highlight_keywords_{edition}.html")],
+            #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+            {
+                expect_file![format!("./test_data/highlight_keywords_{edition}.html")]
+            },
             false,
         );
     }
@@ -439,7 +454,10 @@ macro_rules! void_2024 {
 }
 
 "#,
-        expect_file![format!("./test_data/highlight_keywords_macros.html")],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file![format!("./test_data/highlight_keywords_macros.html")]
+        },
         false,
     );
 }
@@ -588,7 +606,10 @@ fn main() {
     format_args!("{} {} {} {} {} {} {backslash} {CONSTANT} {m}", backslash, format_args!("{}", 0), foo, "bar", toho!(), backslash);
     reuse_twice!("{backslash}");
 }"#,
-        expect_file!["./test_data/highlight_strings.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_strings.html"]
+        },
         false,
     );
 }
@@ -684,7 +705,10 @@ fn main() {
     }
 }
 "#,
-        expect_file!["./test_data/highlight_unsafe.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_unsafe.html"]
+        },
         false,
     );
 }
@@ -732,7 +756,10 @@ macro_rules! unsafe_deref {
     };
 }
 "#,
-        expect_file!["./test_data/highlight_const.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_const.html"]
+        },
         false,
     );
 }
@@ -902,7 +929,10 @@ pub fn block_comments2() {}
 //! fn test() {}
 //! ```
 "#,
-        expect_file!["./test_data/highlight_doctest.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_doctest.html"]
+        },
         false,
     );
 }
@@ -929,7 +959,10 @@ pub struct T;
 //- /proc_macro/lib.rs crate:proc_macro
 pub struct ProcMacro;
 "#,
-        expect_file!["./test_data/highlight_extern_crate.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_extern_crate.html"]
+        },
         false,
     );
 }
@@ -973,7 +1006,10 @@ mod inner {
     }
 }
 "#,
-        expect_file!["./test_data/highlight_crate_root.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_crate_root.html"]
+        },
         false,
     );
 }
@@ -990,7 +1026,10 @@ fn main() {
     let nums = iter::repeat(foo.unwrap());
 }
 "#,
-        expect_file!["./test_data/highlight_default_library.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_default_library.html"]
+        },
         false,
     );
 }
@@ -1018,7 +1057,10 @@ impl t for foo {
     pub fn is_not_static(&self) {}
 }
 "#,
-        expect_file!["./test_data/highlight_assoc_functions.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_assoc_functions.html"]
+        },
         false,
     )
 }
@@ -1047,7 +1089,10 @@ pub mod foo {
     "#);
 }
 "##,
-        expect_file!["./test_data/highlight_injection_2.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_injection_2.html"]
+        },
         false,
     );
 }
@@ -1076,7 +1121,10 @@ fn foo() {
     );
 }
 "##,
-        expect_file!["./test_data/highlight_injection.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_injection.html"]
+        },
         false,
     );
 }
@@ -1100,7 +1148,10 @@ fn main() {
     a <<= 1;
 }
 "##,
-        expect_file!["./test_data/highlight_operators.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_operators.html"]
+        },
         false,
     );
 }
@@ -1123,7 +1174,10 @@ pub struct Struct;
 /// This is an intra doc injection test for modules
 mod foo;
 "##,
-        expect_file!["./test_data/highlight_module_docs_inline.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_module_docs_inline.html"]
+        },
         false,
     );
     check_highlighting(
@@ -1142,7 +1196,10 @@ mod foo;
 
 pub struct Struct;
 "##,
-        expect_file!["./test_data/highlight_module_docs_outline.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_module_docs_outline.html"]
+        },
         false,
     );
 }
@@ -1167,7 +1224,10 @@ fn bar() {
     let mut hello = "hello";
 }
 "#,
-        expect_file!["./test_data/highlight_rainbow.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_rainbow.html"]
+        },
         true,
     );
 }
@@ -1195,7 +1255,10 @@ fn main() {
     }
 }
 "#,
-        expect_file!["./test_data/highlight_block_mod_items.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_block_mod_items.html"]
+        },
         false,
     );
 }
@@ -1446,7 +1509,10 @@ pub unsafe fn bootstrap(msp: *const u32, rv: *const u32) -> ! {
     );
 }
 "#,
-        expect_file!["./test_data/highlight_asm.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_asm.html"]
+        },
         false,
     );
 }
@@ -1463,7 +1529,10 @@ fn main() {
 #[proc_macros::issue_18089]
 fn template() {}
 "#,
-        expect_file!["./test_data/highlight_issue_18089.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_issue_18089.html"]
+        },
         false,
     );
 }
@@ -1478,7 +1547,10 @@ fn main() {
 }
 //- /main.rs
 "#,
-        expect_file!["./test_data/highlight_issue_19357.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_issue_19357.html"]
+        },
         false,
     );
 }
@@ -1499,7 +1571,10 @@ fn main() {
             comments: false, // Disable comment highlighting
             ..HL_CONFIG
         },
-        expect_file!["./test_data/highlight_comments_disabled.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_comments_disabled.html"]
+        },
         false,
     );
 }
@@ -1516,7 +1591,10 @@ fn main() {
 }
 "#,
         HighlightConfig { strings: false, ..HL_CONFIG },
-        expect_file!["./test_data/highlight_strings_disabled.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_strings_disabled.html"]
+        },
         false,
     );
 }
@@ -1530,7 +1608,10 @@ fn main() {
     format_args!("{} {}, {} (подозрение на спам: {:.2}%)"б);
 }
 "#,
-        expect_file!["./test_data/regression_20952.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/regression_20952.html"]
+        },
         false,
     );
 }
@@ -1572,7 +1653,10 @@ static STATIC: () = ();
 //- /bar.rs crate:bar
 #![deprecated]
         "#,
-        expect_file!["./test_data/highlight_deprecated.html"],
+        #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+        {
+            expect_file!["./test_data/highlight_deprecated.html"]
+        },
         false,
     );
 }

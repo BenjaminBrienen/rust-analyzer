@@ -247,7 +247,7 @@ impl ProcMacro {
         def_site: Span,
         call_site: Span,
         mixed_site: Span,
-        current_dir: String,
+        current_dir: &AbsPath,
         callback: Option<SubCallback<'_>>,
     ) -> Result<Result<tt::TopSubtree, String>, ServerError> {
         let (mut subtree, mut attr) = (subtree, attr);

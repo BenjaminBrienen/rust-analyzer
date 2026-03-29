@@ -6,7 +6,7 @@ use anyhow::Context;
 use base_db::Env;
 use cargo_metadata::{CargoOpt, MetadataCommand, PackageId};
 use la_arena::{Arena, Idx};
-use paths::{AbsPath, AbsPathBuf, Utf8Path, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf, RelPathBuf};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde_derive::Deserialize;
 use serde_json::from_value;
@@ -91,14 +91,14 @@ pub enum TargetDirectoryConfig {
     #[default]
     None,
     UseSubdirectory,
-    Directory(Utf8PathBuf),
+    Directory(AbsPathBuf),
 }
 
 impl TargetDirectoryConfig {
     pub fn target_dir<'a>(
         &'a self,
-        ws_target_dir: Option<&'a Utf8Path>,
-    ) -> Option<Cow<'a, Utf8Path>> {
+        ws_target_dir: Option<&'a AbsPath>,
+    ) -> Option<Cow<'a, AbsPath>> {
         match self {
             TargetDirectoryConfig::None => None,
             TargetDirectoryConfig::UseSubdirectory => {
@@ -182,9 +182,9 @@ pub struct PackageData {
     /// License as given in the `Cargo.toml`
     pub license: Option<String>,
     /// License file as given in the `Cargo.toml`
-    pub license_file: Option<Utf8PathBuf>,
+    pub license_file: Option<RelPathBuf>,
     /// Readme file as given in the `Cargo.toml`
-    pub readme: Option<Utf8PathBuf>,
+    pub readme: Option<RelPathBuf>,
     /// Rust version as given in the `Cargo.toml`
     pub rust_version: Option<semver::Version>,
     /// The contents of [package.metadata.rust-analyzer]
@@ -411,8 +411,12 @@ impl CargoWorkspace {
                 description,
                 homepage,
                 license,
-                license_file,
-                readme,
+                // > The license-file field contains the path to a file containing the text of the license (relative to this Cargo.toml).
+                // Source: https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields
+                license_file: license_file.map(RelPathBuf::assert),
+                // > The readme field should be the path to a file in the package root (relative to this Cargo.toml)...
+                // Source: https://doc.rust-lang.org/cargo/reference/manifest.html#the-readme-field
+                readme: readme.map(RelPathBuf::assert),
                 rust_version,
                 dependencies: Vec::new(),
                 features: features.into_iter().collect(),
@@ -686,7 +690,7 @@ impl FetchMetadata {
         } else if let Some(v) = config.toolchain_version.as_ref() {
             lockfile_copy = make_lockfile_copy(
                 v,
-                &<_ as AsRef<Utf8Path>>::as_ref(cargo_toml).with_extension("lock"),
+                &<_ as AsRef<AbsPath>>::as_ref(cargo_toml).with_extension("lock"),
             );
         }
 

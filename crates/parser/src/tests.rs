@@ -1,13 +1,10 @@
 mod prefix_entries;
 mod top_entries;
 
-use std::{
-    fmt::Write,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fmt::Write, fs};
 
 use expect_test::expect_file;
+use paths::{AbsPath, AbsPathBuf, RelPathBuf};
 
 use crate::{Edition, LexedStr, TopEntryPoint};
 
@@ -15,7 +12,7 @@ use crate::{Edition, LexedStr, TopEntryPoint};
 #[path = "../test_data/generated/runner.rs"]
 mod runner;
 
-fn infer_edition(file_path: &Path) -> Edition {
+fn infer_edition(file_path: &AbsPath) -> Edition {
     let file_content = std::fs::read_to_string(file_path).unwrap();
     if let Some(edition) = file_content.strip_prefix("//@ edition: ") {
         edition[..4].parse().expect("invalid edition directive")
@@ -29,7 +26,11 @@ fn lex_ok() {
     for case in TestCase::list("lexer/ok") {
         let _guard = stdx::panic_context::enter(format!("{:?}", case.rs));
         let actual = lex(&case.text, infer_edition(&case.rs));
-        expect_file![case.rast].assert_eq(&actual)
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file![case.rast] }.assert_eq(&actual);
     }
 }
 
@@ -38,7 +39,12 @@ fn lex_err() {
     for case in TestCase::list("lexer/err") {
         let _guard = stdx::panic_context::enter(format!("{:?}", case.rs));
         let actual = lex(&case.text, infer_edition(&case.rs));
-        expect_file![case.rast].assert_eq(&actual)
+
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file![case.rast] }.assert_eq(&actual)
     }
 }
 
@@ -62,8 +68,13 @@ fn parse_ok() {
     for case in TestCase::list("parser/ok") {
         let _guard = stdx::panic_context::enter(format!("{:?}", case.rs));
         let (actual, errors) = parse(TopEntryPoint::SourceFile, &case.text, Edition::CURRENT);
-        assert!(!errors, "errors in an OK file {}:\n{actual}", case.rs.display());
-        expect_file![case.rast].assert_eq(&actual);
+        assert!(!errors, "errors in an OK file {}:\n{actual}", case.rs);
+
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file![case.rast] }.assert_eq(&actual);
     }
 }
 
@@ -72,8 +83,13 @@ fn parse_err() {
     for case in TestCase::list("parser/err") {
         let _guard = stdx::panic_context::enter(format!("{:?}", case.rs));
         let (actual, errors) = parse(TopEntryPoint::SourceFile, &case.text, Edition::CURRENT);
-        assert!(errors, "no errors in an ERR file {}:\n{actual}", case.rs.display());
-        expect_file![case.rast].assert_eq(&actual)
+        assert!(errors, "no errors in an ERR file {}:\n{actual}", case.rs);
+
+        #[expect(
+            clippy::disallowed_types,
+            reason = "clippy emits warnings from external macro output"
+        )]
+        { expect_file![case.rast] }.assert_eq(&actual)
     }
 }
 
@@ -132,23 +148,23 @@ fn parse(entry: TopEntryPoint, text: &str, edition: Edition) -> (String, bool) {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct TestCase {
-    rs: PathBuf,
-    rast: PathBuf,
+    rs: AbsPathBuf,
+    rast: AbsPathBuf,
     text: String,
 }
 
 impl TestCase {
     fn list(path: &'static str) -> Vec<TestCase> {
-        let crate_root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let crate_root_dir = AbsPathBuf::make_absolute(&env!("CARGO_MANIFEST_DIR"));
         let test_data_dir = crate_root_dir.join("test_data");
         let dir = test_data_dir.join(path);
 
         let mut res = Vec::new();
-        let read_dir = fs::read_dir(&dir)
-            .unwrap_or_else(|err| panic!("can't `read_dir` {}: {err}", dir.display()));
+        let read_dir =
+            fs::read_dir(&dir).unwrap_or_else(|err| panic!("can't `read_dir` {}: {err}", dir));
         for file in read_dir {
             let file = file.unwrap();
-            let path = file.path();
+            let path = AbsPathBuf::make_absolute(&file.path());
             if path.extension().unwrap_or_default() == "rs" {
                 let rs = path;
                 let rast = rs.with_extension("rast");
@@ -173,24 +189,22 @@ fn run_and_expect_errors(path: &str) {
 
 #[track_caller]
 fn run_and_expect_no_errors_with_edition(path: &str, edition: Edition) {
-    let path = PathBuf::from(path);
+    let path = RelPathBuf::assert_str(path);
     let text = std::fs::read_to_string(&path).unwrap();
     let (actual, errors) = parse(TopEntryPoint::SourceFile, &text, edition);
-    assert!(!errors, "errors in an OK file {}:\n{actual}", path.display());
-    let mut p = PathBuf::from("..");
-    p.push(path);
-    p.set_extension("rast");
-    expect_file![p].assert_eq(&actual)
+    assert!(!errors, "errors in an OK file {}:\n{actual}", path);
+    let path = AbsPathBuf::make_absolute(&path).with_extension("rast");
+    #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+    { expect_file![path] }.assert_eq(&actual)
 }
 
 #[track_caller]
 fn run_and_expect_errors_with_edition(path: &str, edition: Edition) {
-    let path = PathBuf::from(path);
+    let path = RelPathBuf::assert_str(path);
     let text = std::fs::read_to_string(&path).unwrap();
     let (actual, errors) = parse(TopEntryPoint::SourceFile, &text, edition);
-    assert!(errors, "no errors in an ERR file {}:\n{actual}", path.display());
-    let mut p = PathBuf::from("..");
-    p.push(path);
-    p.set_extension("rast");
-    expect_file![p].assert_eq(&actual)
+    assert!(errors, "no errors in an ERR file {}:\n{actual}", path);
+    let path = AbsPathBuf::make_absolute(&path).with_extension("rast");
+    #[expect(clippy::disallowed_types, reason = "clippy emits lints from external macros")]
+    { expect_file![path] }.assert_eq(&actual)
 }

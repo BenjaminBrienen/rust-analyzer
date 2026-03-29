@@ -9,11 +9,8 @@
 
 #![allow(clippy::disallowed_methods)]
 
-use std::{
-    env,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use paths::{AbsPath, AbsPathBuf};
+use std::{env, process::Command};
 
 use cargo_metadata::Message;
 
@@ -28,7 +25,7 @@ fn main() {
             .contains("nightly");
 
     let out_dir = env::var_os("OUT_DIR").unwrap();
-    let out_dir = Path::new(&out_dir);
+    let out_dir: &AbsPath = out_dir.as_os_str().try_into().unwrap();
 
     if !has_features {
         println!("proc-macro-test testing only works on nightly toolchains");
@@ -39,7 +36,7 @@ fn main() {
     let name = "proc-macro-test-impl";
     let version = "0.0.0";
 
-    let imp_dir = std::env::current_dir().unwrap().join("imp");
+    let imp_dir = AbsPathBuf::make_absolute("imp");
 
     let staging_dir = out_dir.join("proc-macro-test-imp-staging");
     // this'll error out if the staging dir didn't previously exist. using
@@ -47,11 +44,11 @@ fn main() {
     // wipe it and ignore errors.
     let _ = std::fs::remove_dir_all(&staging_dir);
 
-    println!("Creating {}", staging_dir.display());
+    println!("Creating {}", staging_dir);
     std::fs::create_dir_all(&staging_dir).unwrap();
 
     let src_dir = staging_dir.join("src");
-    println!("Creating {}", src_dir.display());
+    println!("Creating {}", src_dir);
     std::fs::create_dir_all(src_dir).unwrap();
 
     for item_els in [&["Cargo.toml"][..], &["build.rs"][..], &["src", "lib.rs"]] {
@@ -61,7 +58,7 @@ fn main() {
             src.push(el);
             dst.push(el);
         }
-        println!("Copying {} to {}", src.display(), dst.display());
+        println!("Copying {} to {}", src, dst);
         std::fs::copy(src, dst).unwrap();
     }
 
@@ -113,12 +110,12 @@ fn main() {
             && artifact.target.kind.contains(&cargo_metadata::TargetKind::ProcMacro)
             && (artifact.package_id.repr.starts_with(&repr) || artifact.package_id.repr == pkgid)
         {
-            artifact_path = Some(PathBuf::from(&artifact.filenames[0]));
+            artifact_path = Some(artifact.filenames[0].clone());
         }
     }
 
     // This file is under `target_dir` and is already under `OUT_DIR`.
     let artifact_path = artifact_path.expect("no dylib for proc-macro-test-impl found");
 
-    println!("cargo::rustc-env=PROC_MACRO_TEST_LOCATION={}", artifact_path.display());
+    println!("cargo::rustc-env=PROC_MACRO_TEST_LOCATION={}", artifact_path);
 }

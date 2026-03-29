@@ -6,6 +6,7 @@ use std::{panic::RefUnwindSafe, sync};
 
 use base_db::{Crate, CrateBuilderId, CratesIdMap, Env, ProcMacroLoadingError};
 use intern::Symbol;
+use paths::AbsPath;
 use rustc_hash::FxHashMap;
 use span::Span;
 use triomphe::Arc;
@@ -32,7 +33,7 @@ pub trait ProcMacroExpander: fmt::Debug + Send + Sync + RefUnwindSafe + Any {
         def_site: Span,
         call_site: Span,
         mixed_site: Span,
-        current_dir: String,
+        current_dir: &AbsPath,
     ) -> Result<tt::TopSubtree, ProcMacroExpansionError>;
 
     fn eq_dyn(&self, other: &dyn ProcMacroExpander) -> bool;
@@ -306,8 +307,7 @@ impl CustomProcMacroExpander {
 
                 // Proc macros have access to the environment variables of the invoking crate.
                 let env = calling_crate.env(db);
-                // FIXME: Can we avoid the string allocation here?
-                let current_dir = calling_crate.data(db).proc_macro_cwd.to_string();
+                let current_dir = &*calling_crate.data(db).proc_macro_cwd;
 
                 match proc_macro.expander.expand(
                     db,

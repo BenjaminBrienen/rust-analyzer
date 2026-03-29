@@ -156,7 +156,7 @@ pub(crate) fn expand(
     def_site: Span,
     call_site: Span,
     mixed_site: Span,
-    current_dir: String,
+    current_dir: &AbsPath,
     callback: SubCallback<'_>,
 ) -> Result<Result<tt::TopSubtree, String>, crate::ServerError> {
     let version = process.version();
@@ -179,7 +179,7 @@ pub(crate) fn expand(
         },
         lib: proc_macro.dylib_path.to_path_buf().into(),
         env,
-        current_dir: Some(current_dir),
+        current_dir: Some(current_dir.to_string()),
     })));
 
     let response_payload = run_request(process, task, callback)?;

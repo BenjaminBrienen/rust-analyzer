@@ -9,11 +9,11 @@
 use std::{cell::RefCell, io, mem, process::Command};
 
 use base_db::Env;
-use cargo_metadata::{Message, PackageId, camino::Utf8Path};
+use cargo_metadata::{Message, PackageId};
 use cfg::CfgAtom;
 use itertools::Itertools;
 use la_arena::ArenaMap;
-use paths::{AbsPath, AbsPathBuf, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Deserialize as _;
 use stdx::never;
@@ -87,7 +87,7 @@ impl WorkspaceBuildScripts {
             config,
             &allowed_features,
             workspace.manifest_path(),
-            workspace.target_directory().as_ref(),
+            workspace.target_directory(),
             current_dir,
             sysroot,
             toolchain,
@@ -204,7 +204,7 @@ impl WorkspaceBuildScripts {
                 utf8_stdout(&mut cmd)
             })()?;
 
-            let target_libdir = AbsPathBuf::try_from(Utf8PathBuf::from(target_libdir))
+            let target_libdir = AbsPathBuf::try_from(target_libdir)
                 .map_err(|_| anyhow::format_err!("target-libdir was not an absolute path"))?;
             tracing::info!("Loading rustc proc-macro paths from {target_libdir}");
 
@@ -222,21 +222,11 @@ impl WorkspaceBuildScripts {
                                 .0
                                 .trim_start_matches("lib")
                                 .to_owned();
-                            let path = match Utf8PathBuf::from_path_buf(path) {
-                                Ok(path) => path,
-                                Err(path) => {
-                                    tracing::warn!(
-                                        "Proc-macro dylib path contains non-UTF8 characters: {:?}",
-                                        path.display()
-                                    );
-                                    return None;
-                                }
-                            };
                             return match AbsPathBuf::try_from(path) {
                                 Ok(path) => Some((name, path)),
                                 Err(path) => {
                                     tracing::error!(
-                                        "proc-macro dylib path is not absolute: {:?}",
+                                        "proc-macro dylib path is not absolute or contains non-UTF8 characters: {:?}",
                                         path
                                     );
                                     None
@@ -392,14 +382,17 @@ impl WorkspaceBuildScripts {
                                     .kind
                                     .contains(&cargo_metadata::TargetKind::ProcMacro)
                             {
-                                data.proc_macro_dylib_path =
-                                    match message.filenames.iter().find(|file| is_dylib(file)) {
-                                        Some(filename) => {
-                                            let filename = AbsPath::assert(filename);
-                                            ProcMacroDylibPath::Path(filename.to_owned())
-                                        }
-                                        None => ProcMacroDylibPath::DylibNotFound,
-                                    };
+                                data.proc_macro_dylib_path = match message
+                                    .filenames
+                                    .iter()
+                                    .find(|file| is_dylib(file.extension()))
+                                {
+                                    Some(filename) => {
+                                        let filename = AbsPath::assert(filename);
+                                        ProcMacroDylibPath::Path(filename.to_owned())
+                                    }
+                                    None => ProcMacroDylibPath::DylibNotFound,
+                                };
                             }
                         });
                     }
@@ -433,7 +426,7 @@ impl WorkspaceBuildScripts {
         config: &CargoConfig,
         allowed_features: &FxHashSet<String>,
         manifest_path: &ManifestPath,
-        target_dir: &Utf8Path,
+        target_dir: &AbsPath,
         current_dir: &AbsPath,
         sysroot: &Sysroot,
         toolchain: Option<&semver::Version>,
@@ -465,7 +458,7 @@ impl WorkspaceBuildScripts {
                 let mut lockfile_copy = None;
                 if let Some(toolchain) = toolchain {
                     let lockfile_path =
-                        <_ as AsRef<Utf8Path>>::as_ref(manifest_path).with_extension("lock");
+                        <_ as AsRef<AbsPath>>::as_ref(manifest_path).with_extension("lock");
                     lockfile_copy = make_lockfile_copy(toolchain, &lockfile_path);
                     if let Some(lockfile_copy) = &lockfile_copy {
                         requires_unstable_options = true;
@@ -559,8 +552,8 @@ impl WorkspaceBuildScripts {
 }
 
 // FIXME: Find a better way to know if it is a dylib.
-fn is_dylib(path: &Utf8Path) -> bool {
-    match path.extension().map(|e| e.to_owned().to_lowercase()) {
+fn is_dylib(extension: Option<&str>) -> bool {
+    match extension.map(|e| e.to_owned().to_lowercase()) {
         None => false,
         Some(ext) => matches!(ext.as_str(), "dll" | "dylib" | "so"),
     }

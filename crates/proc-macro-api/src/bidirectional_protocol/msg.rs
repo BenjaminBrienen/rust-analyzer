@@ -1,5 +1,7 @@
 //! Bidirectional protocol messages
 
+#![expect(clippy::disallowed_types, reason = "protocol accepts relative paths")]
+
 use std::{
     io::{self, BufRead, Write},
     ops::Range,

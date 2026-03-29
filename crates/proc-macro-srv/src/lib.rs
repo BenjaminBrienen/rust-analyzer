@@ -51,7 +51,7 @@ use std::{
     thread,
 };
 
-use paths::{Utf8Path, Utf8PathBuf};
+use paths::{AbsPath, Utf8PathBuf};
 use span::Span;
 use temp_dir::TempDir;
 
@@ -146,7 +146,7 @@ impl ExpandError {
 impl ProcMacroSrv<'_> {
     pub fn expand<S: ProcMacroSrvSpan>(
         &self,
-        lib: impl AsRef<Utf8Path>,
+        lib: impl AsRef<AbsPath>,
         env: &[(String, String)],
         current_dir: Option<impl AsRef<Path>>,
         macro_name: &str,
@@ -202,13 +202,13 @@ impl ProcMacroSrv<'_> {
 
     pub fn list_macros(
         &self,
-        dylib_path: &Utf8Path,
+        dylib_path: &AbsPath,
     ) -> Result<Vec<(String, ProcMacroKind)>, String> {
         let expander = self.expander(dylib_path)?;
         Ok(expander.list_macros().map(|(k, v)| (k.to_owned(), v)).collect())
     }
 
-    fn expander(&self, path: &Utf8Path) -> Result<Arc<dylib::Expander>, String> {
+    fn expander(&self, path: &AbsPath) -> Result<Arc<dylib::Expander>, String> {
         let expander = || {
             let expander = dylib::Expander::new(&self.temp_dir, path)
                 .map_err(|err| format!("Cannot create expander for {path}: {err}",));
@@ -325,6 +325,7 @@ impl<'snap> EnvChange<'snap> {
         let guard = ENV_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let prev_working_dir = match current_dir {
             Some(dir) => {
+                // detects whether the cwd no longer exists
                 let prev_working_dir = std::env::current_dir().ok();
                 if let Err(err) = std::env::set_current_dir(dir) {
                     eprintln!(

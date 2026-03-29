@@ -71,7 +71,7 @@ impl Drop for CpuSpan {
         #[cfg(feature = "cpu_profiler")]
         {
             google_cpu_profiler::stop();
-            let profile_data = std::env::current_dir().unwrap().join("out.profile");
+            let profile_data = paths::AbsPathBuf::make_absolute("out.profile");
             eprintln!("Profile data saved to:\n\n    {}\n", profile_data.display());
             let mut cmd = std::process::Command::new("pprof");
             cmd.arg("-svg").arg(std::env::current_exe().unwrap()).arg(&profile_data);

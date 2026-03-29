@@ -32,7 +32,7 @@ pub(crate) fn get(
 
 #[cfg(test)]
 mod tests {
-    use paths::{AbsPathBuf, Utf8PathBuf};
+    use paths::AbsPathBuf;
 
     use crate::{ManifestPath, Sysroot};
 
@@ -42,8 +42,7 @@ mod tests {
     fn cargo() {
         let manifest_path = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
         let sysroot = Sysroot::empty();
-        let manifest_path =
-            ManifestPath::try_from(AbsPathBuf::assert(Utf8PathBuf::from(manifest_path))).unwrap();
+        let manifest_path = ManifestPath::try_from(AbsPathBuf::assert(manifest_path)).unwrap();
         let cfg = QueryConfig::Cargo(&sysroot, &manifest_path, &None);
         assert!(get(cfg, &FxHashMap::default()).is_ok());
     }
@@ -51,7 +50,7 @@ mod tests {
     #[test]
     fn rustc() {
         let sysroot = Sysroot::empty();
-        let cfg = QueryConfig::Rustc(&sysroot, env!("CARGO_MANIFEST_DIR").as_ref());
+        let cfg = QueryConfig::Rustc(&sysroot, &AbsPathBuf::assert(env!("CARGO_MANIFEST_DIR")));
         assert!(get(cfg, &FxHashMap::default()).is_ok());
     }
 }

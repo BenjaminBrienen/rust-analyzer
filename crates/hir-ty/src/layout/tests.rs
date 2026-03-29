@@ -1,6 +1,7 @@
 use base_db::target::TargetData;
 use either::Either;
 use hir_def::{HasModule, db::DefDatabase};
+use paths::AbsPathBuf;
 use project_model::{Sysroot, toolchain_info::QueryConfig};
 use rustc_hash::FxHashMap;
 use rustc_type_ir::inherent::GenericArgs as _;
@@ -21,7 +22,7 @@ mod closure;
 
 fn current_machine_target_data() -> TargetData {
     project_model::toolchain_info::target_data::get(
-        QueryConfig::Rustc(&Sysroot::empty(), &std::env::current_dir().unwrap()),
+        QueryConfig::Rustc(&Sysroot::empty(), &AbsPathBuf::current_working_directory()),
         None,
         &FxHashMap::default(),
     )

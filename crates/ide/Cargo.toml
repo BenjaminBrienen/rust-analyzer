@@ -35,6 +35,7 @@ ide-completion.workspace = true
 ide-db.workspace = true
 ide-diagnostics.workspace = true
 ide-ssr.workspace = true
+paths.workspace = true
 profile.workspace = true
 stdx.workspace = true
 syntax.workspace = true

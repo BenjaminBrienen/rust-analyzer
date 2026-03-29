@@ -1,5 +1,5 @@
 //! Read `.cargo/config.toml` as a TOML table
-use paths::{AbsPath, Utf8Path, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf};
 use rustc_hash::FxHashMap;
 use toml::{
     Spanned,
@@ -118,8 +118,7 @@ impl<'a> CargoConfigFileReader<'a> {
                 });
 
             return origin_path.and_then(|path| {
-                <&Utf8Path>::from(path)
-                    .try_into()
+                <&AbsPath>::try_from(path)
                     .ok()
                     // Two levels up to the config file.
                     // See https://doc.rust-lang.org/cargo/reference/config.html#config-relative-paths
@@ -133,7 +132,7 @@ impl<'a> CargoConfigFileReader<'a> {
 }
 
 pub(crate) struct LockfileCopy {
-    pub(crate) path: Utf8PathBuf,
+    pub(crate) path: AbsPathBuf,
     pub(crate) usage: LockfileUsage,
     _temp_dir: temp_dir::TempDir,
 }
@@ -147,7 +146,7 @@ pub(crate) enum LockfileUsage {
 
 pub(crate) fn make_lockfile_copy(
     toolchain_version: &semver::Version,
-    lockfile_path: &Utf8Path,
+    lockfile_path: &AbsPath,
 ) -> Option<LockfileCopy> {
     const MINIMUM_TOOLCHAIN_VERSION_SUPPORTING_LOCKFILE_PATH_FLAG: semver::Version =
         semver::Version {
@@ -177,7 +176,7 @@ pub(crate) fn make_lockfile_copy(
     };
 
     let temp_dir = temp_dir::TempDir::with_prefix("rust-analyzer").ok()?;
-    let path: Utf8PathBuf = temp_dir.path().join("Cargo.lock").try_into().ok()?;
+    let path = AbsPathBuf::make_absolute(temp_dir.path()).join("Cargo.lock");
     let path = match std::fs::copy(lockfile_path, &path) {
         Ok(_) => {
             tracing::debug!("Copied lock file from `{}` to `{}`", lockfile_path, path);

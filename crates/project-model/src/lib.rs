@@ -29,14 +29,14 @@ pub mod toolchain_info {
     pub mod target_tuple;
     pub mod version;
 
-    use std::path::Path;
+    use paths::AbsPath;
 
     use crate::{ManifestPath, Sysroot, cargo_config_file::CargoConfigFile};
 
     #[derive(Copy, Clone)]
     pub enum QueryConfig<'a> {
         /// Directly invoke `rustc` to query the desired information.
-        Rustc(&'a Sysroot, &'a Path),
+        Rustc(&'a Sysroot, &'a AbsPath),
         /// Attempt to use cargo to query the desired information, honoring cargo configurations.
         /// If this fails, falls back to invoking `rustc` directly.
         Cargo(&'a Sysroot, &'a ManifestPath, &'a Option<CargoConfigFile>),
@@ -62,7 +62,7 @@ use std::{
 };
 
 use anyhow::{Context, bail, format_err};
-use paths::{AbsPath, AbsPathBuf, Utf8PathBuf};
+use paths::{AbsPath, AbsPathBuf};
 use rustc_hash::FxHashSet;
 
 pub use crate::{
@@ -174,8 +174,6 @@ impl ProjectManifest {
                 .filter_map(Result::ok)
                 .map(|it| it.path().join("Cargo.toml"))
                 .filter(|it| it.exists())
-                .map(Utf8PathBuf::from_path_buf)
-                .filter_map(Result::ok)
                 .map(AbsPathBuf::try_from)
                 .filter_map(Result::ok)
                 .filter_map(|it| it.try_into().ok())

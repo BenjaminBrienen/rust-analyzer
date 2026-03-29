@@ -1,7 +1,7 @@
 //! Functionality to discover the current build target(s).
-use std::path::Path;
 
 use anyhow::Context;
+use paths::AbsPath;
 use rustc_hash::FxHashMap;
 use toolchain::Tool;
 
@@ -25,7 +25,7 @@ pub fn get(
         QueryConfig::Cargo(sysroot, cargo_toml, config_file) => {
             match config_file.as_ref().and_then(cargo_config_build_target) {
                 Some(it) => return Ok(it),
-                None => (sysroot, cargo_toml.parent().as_ref()),
+                None => (sysroot, cargo_toml.parent()),
             }
         }
         QueryConfig::Rustc(sysroot, current_dir) => (sysroot, current_dir),
@@ -36,7 +36,7 @@ pub fn get(
 fn rustc_discover_host_tuple(
     extra_env: &FxHashMap<String, Option<String>>,
     sysroot: &Sysroot,
-    current_dir: &Path,
+    current_dir: &AbsPath,
 ) -> anyhow::Result<String> {
     let mut cmd = sysroot.tool(Tool::Rustc, current_dir, extra_env);
     cmd.arg("-vV");
@@ -106,7 +106,7 @@ fn parse_toml_cargo_config_build_target(
 
 #[cfg(test)]
 mod tests {
-    use paths::{AbsPathBuf, Utf8PathBuf};
+    use paths::AbsPathBuf;
 
     use crate::{ManifestPath, Sysroot};
 
@@ -116,8 +116,7 @@ mod tests {
     fn cargo() {
         let manifest_path = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
         let sysroot = Sysroot::empty();
-        let manifest_path =
-            ManifestPath::try_from(AbsPathBuf::assert(Utf8PathBuf::from(manifest_path))).unwrap();
+        let manifest_path = ManifestPath::try_from(AbsPathBuf::assert(manifest_path)).unwrap();
         let cfg = QueryConfig::Cargo(&sysroot, &manifest_path, &None);
         assert!(get(cfg, None, &FxHashMap::default()).is_ok());
     }
@@ -125,7 +124,7 @@ mod tests {
     #[test]
     fn rustc() {
         let sysroot = Sysroot::empty();
-        let cfg = QueryConfig::Rustc(&sysroot, env!("CARGO_MANIFEST_DIR").as_ref());
+        let cfg = QueryConfig::Rustc(&sysroot, &AbsPathBuf::assert(env!("CARGO_MANIFEST_DIR")));
         assert!(get(cfg, None, &FxHashMap::default()).is_ok());
     }
 }

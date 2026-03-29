@@ -279,7 +279,7 @@ impl ProcMacroServerProcess {
         def_site: Span,
         call_site: Span,
         mixed_site: Span,
-        current_dir: String,
+        current_dir: &AbsPath,
         callback: Option<SubCallback<'_>>,
     ) -> Result<Result<tt::TopSubtree, String>, ServerError> {
         self.active.fetch_add(1, Ordering::AcqRel);

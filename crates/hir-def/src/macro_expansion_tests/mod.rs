@@ -27,6 +27,7 @@ use hir_expand::{
 };
 use intern::{Symbol, sym};
 use itertools::Itertools;
+use paths::AbsPath;
 use span::{
     Edition, NO_DOWNMAP_ERASED_FILE_AST_ID_MARKER, ROOT_ERASED_FILE_AST_ID, Span, SpanAnchor,
     SyntaxContext,
@@ -394,7 +395,7 @@ impl ProcMacroExpander for IdentityWhenValidProcMacroExpander {
         _: Span,
         _: Span,
         _: Span,
-        _: String,
+        _: &AbsPath,
     ) -> Result<TopSubtree, ProcMacroExpansionError> {
         let (parse, _) = syntax_bridge::token_tree_to_syntax_node(
             subtree,

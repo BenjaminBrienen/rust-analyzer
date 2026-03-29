@@ -28,6 +28,7 @@ tt.workspace = true
 vfs-notify.workspace = true
 vfs.workspace = true
 intern.workspace = true
+paths.workspace = true
 
 [features]
 in-rust-tree = ["hir-expand/in-rust-tree"]

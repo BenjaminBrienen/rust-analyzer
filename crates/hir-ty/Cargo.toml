@@ -55,6 +55,7 @@ hir-expand.workspace = true
 base-db.workspace = true
 syntax.workspace = true
 span.workspace = true
+paths.workspace = true
 thin-vec = "0.2.14"
 
 [dev-dependencies]

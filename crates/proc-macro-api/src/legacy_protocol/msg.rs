@@ -1,4 +1,7 @@
 //! Defines messages for cross-process message passing based on `ndjson` wire protocol
+
+#![expect(clippy::disallowed_types, reason = "protocol accepts relative paths")]
+
 pub(crate) mod flat;
 pub use self::flat::*;
 
@@ -193,6 +196,7 @@ impl Message for Response {
 #[cfg(test)]
 mod tests {
     use intern::Symbol;
+    use paths::AbsPathBuf;
     use span::{
         Edition, ROOT_ERASED_FILE_AST_ID, Span, SpanAnchor, SyntaxContext, TextRange, TextSize,
     };
@@ -386,7 +390,7 @@ mod tests {
                         },
                         span_data_table: Vec::new(),
                     },
-                    lib: Utf8PathBuf::from_path_buf(std::env::current_dir().unwrap()).unwrap(),
+                    lib: AbsPathBuf::current_working_directory().into(),
                     env: Default::default(),
                     current_dir: Default::default(),
                 };

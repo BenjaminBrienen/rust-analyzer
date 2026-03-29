@@ -8,7 +8,7 @@
 #[cfg(feature = "in-rust-tree")]
 extern crate rustc_driver as _;
 
-use std::{any::Any, collections::hash_map::Entry, mem, path::Path, sync};
+use std::{any::Any, collections::hash_map::Entry, mem, sync};
 
 use crossbeam_channel::{Receiver, unbounded};
 use hir_expand::{
@@ -54,12 +54,12 @@ pub enum ProcMacroServerChoice {
 }
 
 pub fn load_workspace_at(
-    root: &Path,
+    root: &AbsPath,
     cargo_config: &CargoConfig,
     load_config: &LoadCargoConfig,
     progress: &(dyn Fn(String) + Sync),
 ) -> anyhow::Result<(RootDatabase, vfs::Vfs, Option<ProcMacroClient>)> {
-    let root = AbsPathBuf::assert_utf8(std::env::current_dir()?.join(root));
+    let root = AbsPathBuf::make_absolute(root);
     let root = ProjectManifest::discover_single(&root)?;
     let manifest_path = root.manifest_path().clone();
     let mut workspace = ProjectWorkspace::load(root, cargo_config, progress)?;
@@ -548,7 +548,7 @@ impl ProcMacroExpander for Expander {
         def_site: Span,
         call_site: Span,
         mixed_site: Span,
-        current_dir: String,
+        current_dir: &AbsPath,
     ) -> Result<tt::TopSubtree, ProcMacroExpansionError> {
         let cb = |req| match req {
             SubRequest::LocalFilePath { file_id } => {
@@ -745,13 +745,12 @@ mod tests {
 
     #[test]
     fn test_loading_rust_analyzer() {
-        let cargo_toml_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let cargo_toml_path = AbsPath::assert_absolute_and_utf8(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .parent()
             .unwrap()
             .join("Cargo.toml");
-        let cargo_toml_path = AbsPathBuf::assert_utf8(cargo_toml_path);
         let manifest = ProjectManifest::from_manifest_file(cargo_toml_path).unwrap();
 
         let cargo_config = CargoConfig { set_test: true, ..CargoConfig::default() };

@@ -73,6 +73,7 @@ use ide_db::{
 };
 use ide_db::{MiniCore, ra_fixture::RaFixtureAnalysis};
 use macros::UpmapFromRaFixture;
+use paths::AbsPathBuf;
 use syntax::{AstNode, SourceFile, ast};
 use triomphe::Arc;
 use view_memory_layout::{RecursiveMemoryLayout, view_memory_layout};
@@ -254,11 +255,7 @@ impl Analysis {
         // Default to enable test for single file.
         let mut cfg_options = CfgOptions::default();
 
-        // FIXME: This is less than ideal
-        let proc_macro_cwd = Arc::new(
-            TryFrom::try_from(&*std::env::current_dir().unwrap().as_path().to_string_lossy())
-                .unwrap(),
-        );
+        let proc_macro_cwd = Arc::new(AbsPathBuf::current_working_directory());
         let crate_attrs = Vec::new();
         cfg_options.insert_atom(sym::test);
         crate_graph.add_crate_root(

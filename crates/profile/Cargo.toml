@@ -28,6 +28,9 @@ windows-sys = { version = "0.60", features = [
     "Win32_System_ProcessStatus",
 ] }
 
+[target.'cfg(cpu_profiler)'.dependencies]
+paths.workspace = true
+
 [features]
 cpu_profiler = []
 jemalloc = ["jemalloc-ctl"]

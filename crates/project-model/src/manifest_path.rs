@@ -1,7 +1,7 @@
 //! See [`ManifestPath`].
-use std::{borrow::Borrow, fmt, ops};
+use std::{borrow::Borrow, fmt, ops, path};
 
-use paths::{AbsPath, AbsPathBuf, Utf8Path};
+use paths::{AbsPath, AbsPathBuf};
 
 /// More or less [`AbsPathBuf`] with non-None parent.
 ///
@@ -37,6 +37,10 @@ impl ManifestPath {
         self.file.parent().unwrap()
     }
 
+    #[deprecated(
+        note = "We explicitly do not provide canonicalization API, as that is almost always a wrong solution, see #14430"
+    )]
+    #[allow(deprecated)]
     pub fn canonicalize(&self) -> ! {
         (**self).canonicalize()
     }
@@ -66,7 +70,8 @@ impl AsRef<AbsPath> for ManifestPath {
     }
 }
 
-impl AsRef<std::path::Path> for ManifestPath {
+#[expect(clippy::disallowed_types, reason = "Only used for compatibility with other crates")]
+impl AsRef<path::Path> for ManifestPath {
     fn as_ref(&self) -> &std::path::Path {
         self.file.as_ref()
     }
@@ -78,8 +83,9 @@ impl AsRef<std::ffi::OsStr> for ManifestPath {
     }
 }
 
-impl AsRef<Utf8Path> for ManifestPath {
-    fn as_ref(&self) -> &Utf8Path {
+#[expect(clippy::disallowed_types, reason = "Only used for compatibility with other crates")]
+impl AsRef<paths::Utf8Path> for ManifestPath {
+    fn as_ref(&self) -> &paths::Utf8Path {
         self.file.as_ref()
     }
 }
