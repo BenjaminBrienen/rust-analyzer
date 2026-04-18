@@ -598,10 +598,7 @@ pub(crate) fn inlay_hint(
             LazyProperty::Computed(it) => Some(it),
             LazyProperty::Lazy => {
                 something_to_resolve |=
-                    snap.config.visual_studio_code_version().is_none_or(|version| {
-                        VersionReq::parse(">=1.86.0").unwrap().matches(version)
-                    }) && resolve_range_and_hash.is_some()
-                        && fields_to_resolve.resolve_text_edits;
+                    resolve_range_and_hash.is_some() && fields_to_resolve.resolve_text_edits;
                 None
             }
         })

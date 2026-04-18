@@ -2763,8 +2763,8 @@ impl Config {
         self.typing_triggerChars().as_deref().unwrap_or_default()
     }
 
-    // VSCode is our reference implementation, so we allow ourselves to work around issues by
-    // special casing certain versions
+    // VS Code is our reference implementation, so we allow ourselves to work around issues by
+    // special casing certain versions.
     pub fn visual_studio_code_version(&self) -> Option<&Version> {
         self.client_info
             .as_ref()
